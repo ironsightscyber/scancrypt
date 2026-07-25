@@ -1,0 +1,42 @@
+name: Publish to PyPI
+
+# Publishes the sdist + wheel to PyPI via Trusted Publishing (OIDC, no token
+# secrets). DORMANT until the PyPI side exists: on pypi.org, add a (pending)
+# trusted publisher for project "scancrypt" pointing at this repository,
+# workflow "publish.yml", environment "pypi". Until then a tag push simply
+# fails at the upload step with an OIDC error and nothing is published.
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write   # OIDC token for PyPI Trusted Publishing
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Same release gate as the exe build: tag v1.2.3 must match
+      # rprt.__version__ "1.2.3" exactly.
+      - name: Version gate (tag must match rprt.__version__)
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg="$(python -c 'import sys; sys.path.insert(0, "src"); import rprt; print(rprt.__version__)')"
+          if [ "$tag" != "$pkg" ]; then
+            echo "::error::Tag v$tag does not match rprt.__version__ ($pkg). Bump src/rprt/__init__.py before tagging."
+            exit 1
+          fi
+          echo "version gate ok: $pkg"
+
+      - run: pip install build twine
+      - run: python -m build
+      - run: twine check dist/*
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1

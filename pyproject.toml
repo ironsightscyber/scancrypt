@@ -1,0 +1,53 @@
+[project]
+name = "scancrypt"
+# Single source of truth for the version is src/rprt/__init__.py; a CI gate refuses to build
+# a tagged release unless the tag matches it.
+dynamic = ["version"]
+description = "ScanCrypt: finds and extracts the parts of a ransomware-encrypted file that were never actually encrypted."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+authors = [{ name = "IronSights", email = "team@scancrypt.org" }]
+keywords = ["ransomware", "incident-response", "dfir", "data-recovery", "forensics", "entropy"]
+dependencies = [
+    "PySide6>=6.6",
+    "numpy>=1.26",
+    "PyYAML>=6.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/ironsightscyber/scancrypt"
+Source = "https://github.com/ironsightscyber/scancrypt"
+Issues = "https://github.com/ironsightscyber/scancrypt/issues"
+
+[project.optional-dependencies]
+ntfs = [
+    "dissect.ntfs>=3",
+    "dissect.hypervisor>=3",   # read files out of VHDX/VHD/VMDK virtual disks
+]
+dev = [
+    "pytest>=7.0",
+    "pyinstaller>=6.0",
+    "dissect.ntfs>=3",
+    "dissect.hypervisor>=3",
+    "pillow>=10",       # build_scripts/make_icon.py (icon generation only)
+]
+
+[project.scripts]
+scancrypt = "rprt.cli:main"
+scancrypt-gui = "rprt.gui:main"
+rprt = "rprt.cli:main"
+rprt-gui = "rprt.gui:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.dynamic]
+version = { attr = "rprt.__version__" }
+
+[tool.setuptools.package-data]
+rprt = ["signatures.yaml"]

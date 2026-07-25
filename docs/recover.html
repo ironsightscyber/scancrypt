@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hit by ransomware? Start here | ScanCrypt</title>
+<meta name="description" content="A plain-English guide for IT staff at a business hit by ransomware: what to do in the first hour, and how to use ScanCrypt to find out how much of your data is recoverable without paying.">
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800;900&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0A0C11; --bg-2:#0d1017; --panel:#12161f;
+    --ink:#EDEFF3; --dim:#9AA2B1; --muted:#646c7e;
+    --line:rgba(255,255,255,.075); --line-2:rgba(255,255,255,.12);
+    --sig:#37E28C; --sig-dim:#1f9c60; --enc:#FF5A5A; --empty:#2a3242;
+    --display:"Archivo",system-ui,sans-serif;
+    --body:"IBM Plex Sans",system-ui,sans-serif;
+    --mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--dim);font-family:var(--body);
+    font-size:17px;line-height:1.7;-webkit-font-smoothing:antialiased}
+  ::selection{background:rgba(55,226,140,.25);color:#fff}
+  a{color:var(--sig);text-decoration:none}
+  a:hover{color:#68f0ab}
+  .wrap{max-width:820px;margin:0 auto;padding:0 26px}
+  h1,h2,h3{font-family:var(--display);color:var(--ink);margin:0;letter-spacing:-.02em}
+  h1{font-weight:900;font-size:clamp(2.1rem,5.5vw,3.4rem);line-height:1.02;letter-spacing:-.03em}
+  h2{font-weight:800;font-size:clamp(1.45rem,3vw,2rem);line-height:1.1}
+  h3{font-weight:700;font-size:1.05rem}
+  .eyebrow{font-family:var(--mono);font-size:.74rem;letter-spacing:.06em;
+    text-transform:uppercase;color:var(--sig)}
+  .eyebrow::before{content:"// "}
+  .btn{display:inline-block;font-family:var(--mono);font-weight:500;font-size:.85rem;
+    padding:.66rem 1.25rem;border-radius:3px;border:1px solid transparent;transition:.15s}
+  .btn.pri{background:var(--sig);color:#04120a;font-weight:700}
+  .btn.pri:hover{background:#5cf0a6}
+  .btn.gho{border-color:var(--line-2);color:var(--ink)}
+  .btn.gho:hover{border-color:var(--sig);color:var(--sig)}
+
+  header{position:sticky;top:0;z-index:30;background:rgba(10,12,17,.82);
+    backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+  nav{display:flex;align-items:center;gap:16px;height:64px}
+  .brand{display:flex;align-items:center;gap:11px}
+  .brand .word{font-family:var(--display);font-weight:800;color:var(--ink);font-size:1.16rem}
+  .brand .by{display:flex;align-items:center;margin-left:7px;padding-left:13px;border-left:1px solid var(--line-2)}
+  .brand .by img{height:16px;width:auto}
+  nav .sp{flex:1}
+  nav .lnk{font-family:var(--mono);color:var(--dim);font-size:.82rem}
+  nav .lnk:hover{color:var(--ink)}
+
+  .hero{padding:76px 0 40px}
+  .hero p{max-width:58ch;font-size:1.12rem;margin:1.1rem 0 0}
+  section{padding:52px 0;border-top:1px solid var(--line)}
+  section h2{margin-bottom:1rem}
+  section p{max-width:62ch}
+
+  /* urgent first-hour list */
+  .urgent{border:1px solid rgba(255,90,90,.35);border-left:4px solid var(--enc);border-radius:6px;
+    background:linear-gradient(135deg,rgba(255,90,90,.07),var(--panel));padding:8px 30px 26px;margin-top:34px}
+  .urgent h2{color:#ff9a9a;font-size:1.25rem;margin-top:22px}
+  .urgent ol{margin:14px 0 0;padding-left:1.2em}
+  .urgent li{margin:.85rem 0;color:var(--ink)}
+  .urgent li b{color:#ff9a9a}
+  .urgent li span{color:var(--dim)}
+
+  .steps{counter-reset:s;margin-top:8px}
+  .stp{display:grid;grid-template-columns:56px 1fr;gap:20px;padding:26px 0;border-bottom:1px solid var(--line)}
+  .stp:last-child{border-bottom:none}
+  .stp::before{counter-increment:s;content:counter(s,decimal-leading-zero);
+    font-family:var(--mono);font-weight:700;font-size:1.1rem;color:var(--sig);padding-top:2px}
+  .stp h3{margin-bottom:.4rem}
+  .stp p{margin:.4rem 0 0}
+  .stp code, p code, li code{font-family:var(--mono);font-size:.86em;background:var(--bg-2);
+    border:1px solid var(--line);border-radius:3px;padding:.12em .4em;color:var(--ink)}
+  .cmd{margin:.9rem 0 0;background:var(--bg-2);border:1px solid var(--line-2);border-radius:5px;
+    padding:14px 18px;font-family:var(--mono);font-size:.84rem;color:var(--dim);overflow-x:auto}
+  .cmd b{color:var(--sig);font-weight:500}
+
+  .callout{border:1px solid var(--line-2);border-left:3px solid var(--sig);border-radius:5px;
+    background:linear-gradient(135deg,rgba(55,226,140,.06),var(--panel));padding:22px 26px;margin:26px 0 0}
+  .callout .k{font-family:var(--mono);font-size:.72rem;color:var(--sig);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}
+  .callout p{margin:0;color:var(--ink)}
+
+  .facts{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:26px}
+  .facts > div{background:var(--panel);border:1px solid var(--line);border-radius:5px;padding:20px 22px}
+  .facts h3{font-size:.95rem;margin-bottom:.3rem}
+  .facts p{margin:0;font-size:.92rem}
+
+  .paid{border:1px solid var(--line-2);border-radius:8px;margin-top:30px;
+    background:linear-gradient(135deg,rgba(55,226,140,.06),var(--panel));padding:34px 36px}
+  .paid p{color:var(--dim)}
+  .cta{display:flex;gap:12px;flex-wrap:wrap;margin-top:22px}
+
+  footer{border-top:1px solid var(--line);padding:38px 0 58px;color:var(--muted);font-size:.88rem}
+  footer a{color:var(--dim)} footer a:hover{color:var(--ink)}
+  .disc{margin-top:20px;font-family:var(--mono);font-size:.74rem;line-height:1.7;
+    border:1px solid var(--line);border-radius:5px;padding:16px 18px;background:var(--bg-2)}
+
+  @media (max-width:700px){
+    .facts{grid-template-columns:1fr}
+    .stp{grid-template-columns:40px 1fr;gap:14px}
+    nav .lnk{display:none}
+  }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute"><symbol id="sc-mark" viewBox="0 0 32 32">
+  <path d="M4 10V5a1 1 0 0 1 1-1h5M22 4h5a1 1 0 0 1 1 1v5M28 22v5a1 1 0 0 1-1 1h-5M10 28H5a1 1 0 0 1-1-1v-5"
+        fill="none" stroke="#37E28C" stroke-width="2" stroke-linecap="round"/>
+  <rect x="10" y="14" width="4" height="4" rx="1" fill="#FF5A5A"/>
+  <rect x="15" y="14" width="8" height="4" rx="1" fill="#37E28C"/>
+</symbol></svg>
+
+<header><div class="wrap"><nav>
+  <a class="brand" href="index.html" style="color:inherit">
+    <svg width="26" height="26"><use href="#sc-mark"/></svg>
+    <span class="word">ScanCrypt</span>
+    <span class="by"><img src="ironsights-logo.svg" alt="IronSights"></span>
+  </a>
+  <span class="sp"></span>
+  <a class="lnk" href="index.html">main_site</a>
+  <a class="btn gho" href="https://github.com/ironsightscyber/scancrypt/releases" target="_blank" rel="noopener">Download</a>
+</nav></div></header>
+
+<div class="hero"><div class="wrap">
+  <div class="eyebrow">for IT staff at an encrypted business</div>
+  <h1 style="margin-top:.6rem">Hit by ransomware?<br>Start here.</h1>
+  <p>Your files have strange extensions, there is a ransom note on the desktop, and someone above
+    you wants answers. This page is the short version: what to do in the first hour, and how to
+    find out, for free, how much of your data can come back without paying anyone.</p>
+
+  <div class="urgent">
+    <h2>In the first hour</h2>
+    <ol>
+      <li><b>Disconnect, don't wipe.</b> <span>Pull affected machines off the network (unplug the
+        cable, kill the Wi-Fi) so the encryption and the intruder stop spreading. Do not reformat,
+        reinstall, or run cleanup tools yet. Encrypted files and ransom notes are both your
+        evidence and, as you are about to see, possibly your data.</span></li>
+      <li><b>Don't pay, and don't reply to the attackers yet.</b> <span>Payment is no guarantee of
+        getting anything back, and it funds the next attack. Everything below is about finding out
+        what you can recover before that conversation ever happens.</span></li>
+      <li><b>Check for a free decryptor.</b> <span>Go to
+        <a href="https://www.nomoreransom.org" target="_blank" rel="noopener">nomoreransom.org</a>
+        (run by Europol and partners) and use Crypto Sheriff to identify the strain. For some
+        families a free decryption tool exists. If one does, use it. If not, keep reading.</span></li>
+      <li><b>Tell the people who need to know.</b> <span>If you have cyber insurance, call the
+        insurer's hotline before touching much else; most policies require it and they will
+        often appoint responders. Loop in management early, with facts, not guesses.</span></li>
+    </ol>
+  </div>
+</div></div>
+
+<section><div class="wrap">
+  <div class="eyebrow">the part nobody tells you</div>
+  <h2 style="margin-top:.6rem">"Everything is encrypted" is often not true</h2>
+  <p>Modern ransomware is in a race. Encrypting terabytes takes hours, and the longer it runs the
+    more likely it gets caught. So most strains cheat: they fully encrypt small files, but only
+    scramble <em>part</em> of each large one, the first chunk, or stripes through it, and rename it
+    so everything looks equally dead.</p>
+  <p>That means your Word documents and spreadsheets are probably gone without the key. But the big
+    things, the SQL databases, the virtual machine disks, the backup archives, the file server's
+    video and design files, are often mostly intact underneath. ScanCrypt is a free, open-source
+    tool that measures exactly that: it scans an encrypted file, maps which bytes were actually
+    touched, and tells you what percentage is still readable. It can then pull those bytes back
+    out. No key needed, because the data it recovers was never locked in the first place.</p>
+  <div class="callout">
+    <div class="k">what that changes</div>
+    <p>Instead of telling your boss "it's all gone, they want $500k", you can say "78% of our data,
+      including the finance database, is recoverable for free, here is the report." That is a very
+      different meeting.</p>
+  </div>
+</div></section>
+
+<section><div class="wrap">
+  <div class="eyebrow">step by step</div>
+  <h2 style="margin-top:.6rem">Check what is recoverable</h2>
+  <div class="steps">
+    <div class="stp"><div>
+      <h3>Work on copies, never originals</h3>
+      <p>Copy the encrypted files you care about most to a spare drive or a clean machine, and work
+        there. ScanCrypt itself only ever reads (it never writes to the file it scans, and proves it
+        with before-and-after checksums), but a golden rule of any recovery is that the originals
+        stay untouched until the incident is fully understood.</p>
+    </div></div>
+    <div class="stp"><div>
+      <h3>Download ScanCrypt on a clean computer</h3>
+      <p>Grab <code>scancrypt-gui.exe</code> from the
+        <a href="https://github.com/ironsightscyber/scancrypt/releases" target="_blank" rel="noopener">releases page</a> on a
+        machine that was not infected. It is a single portable file, nothing to install, and it
+        works completely offline, so you can move it across on a USB stick to an isolated network.</p>
+    </div></div>
+    <div class="stp"><div>
+      <h3>Scan your most important large file first</h3>
+      <p>Open the tool and point it at the thing that matters most: the database file, the VM disk,
+        the backup archive. In under a minute you get a verdict: a recoverable percentage and a
+        colour map of the file, green for readable, red for encrypted.</p>
+    </div></div>
+    <div class="stp"><div>
+      <h3>Then measure the whole share at once</h3>
+      <p>The command-line version can sweep an entire folder tree and roll it up into one figure
+        with a per-file list:</p>
+      <div class="cmd"><b>scancrypt</b> D:\Shares --report incident.html</div>
+      <p>That report is a single HTML file you can email to management, your insurer, or a
+        responder. It states its limits honestly and never overclaims.</p>
+    </div></div>
+    <div class="stp"><div>
+      <h3>Pull files out of a VM disk or database</h3>
+      <p>Your most important data usually lives inside a virtual machine disk (a
+        <code>.vhdx</code>, <code>.vhd</code>, or <code>.vmdk</code>) or a database file. Ransomware
+        often wrecks a VM disk's header so it won't even mount, but ScanCrypt rebuilds it from the
+        parts that survived and lists the files inside, then copies out the ones you choose, names
+        and folders intact. Point it at the encrypted VM disk, click <b>Extract files from
+        volume</b>, and pick an empty destination. It will tell you honestly if part of the disk
+        could not be read.</p>
+    </div></div>
+    <div class="stp"><div>
+      <h3>Recover, carefully</h3>
+      <p>For files the scan marks as mostly intact, ScanCrypt can extract the readable bytes to a
+        new file. Understand what you get: a video plays with a corrupt patch, a database usually
+        needs a repair or rebuild step before it opens (ScanCrypt can check a recovered SQL Server
+        database page by page so you know what you have), and a file that was 40% encrypted may not
+        be usable at all. The scan tells you where you stand; extraction is where you may want
+        experienced hands.</p>
+    </div></div>
+  </div>
+</div></section>
+
+<section><div class="wrap">
+  <div class="eyebrow">before you run anything</div>
+  <h2 style="margin-top:.6rem">Is it safe to trust a free tool right now?</h2>
+  <p>Healthy paranoia. You have just been burned by hostile software, so here is exactly what you
+    are running:</p>
+  <div class="facts">
+    <div><h3>Read-only by design</h3><p>It never writes to the file or disk it scans, and records
+      before-and-after SHA-256 checksums so you can prove the evidence was not altered.</p></div>
+    <div><h3>Fully offline</h3><p>No account, no upload, no phone-home. Your data never leaves the
+      machine you run it on.</p></div>
+    <div><h3>Open source</h3><p>Apache 2.0 licensed. Every line of code is public on
+      <a href="https://github.com/ironsightscyber/scancrypt" target="_blank" rel="noopener">GitHub</a> for you or your security
+      team to inspect.</p></div>
+    <div><h3>Free, no catch</h3><p>Built and maintained by <a href="https://ironsights.com.au"
+      target="_blank" rel="noopener">IronSights</a>, an Australian cyber security firm, as a
+      community tool. The scan and the recovery features cost nothing.</p></div>
+  </div>
+</div></section>
+
+<section><div class="wrap">
+  <div class="eyebrow">when to bring in help</div>
+  <h2 style="margin-top:.6rem">The scan is the easy part</h2>
+  <p>Run the scan yourself, always. But consider professional help when there are no usable
+    backups and the recoverable data is business-critical, when a recovered database will not open,
+    when you need the incident investigated properly (how they got in matters as much as the
+    files), or when insurers and lawyers need defensible forensic reporting.</p>
+  <div class="paid">
+    <h2 style="font-size:1.3rem">Want it handled end to end?</h2>
+    <p style="margin:.6rem 0 0">IronSights, the team behind ScanCrypt, does this for a living:
+      incident response, full extraction, database rebuilds, and the reporting that goes with it.
+      The tool stays free either way.</p>
+    <div class="cta">
+      <a class="btn pri" href="https://ironsights.com.au/contact" target="_blank" rel="noopener">Talk to IronSights IR</a>
+      <a class="btn gho" href="index.html">Read more about ScanCrypt</a>
+    </div>
+  </div>
+  <p style="margin-top:1rem">Stuck on the tool itself — it will not run, or you are not sure what
+    the output means? That help is free too: email
+    <a href="mailto:support@scancrypt.org">support@scancrypt.org</a> or open a
+    <a href="https://github.com/ironsightscyber/scancrypt/issues" target="_blank" rel="noopener">GitHub issue</a>.</p>
+</div></section>
+
+<footer><div class="wrap">
+  <div style="display:flex;align-items:center;gap:10px">
+    <svg width="20" height="20"><use href="#sc-mark"/></svg>
+    <span style="font-family:var(--display);font-weight:800;color:var(--ink)">ScanCrypt</span>
+    <span style="font-family:var(--mono);font-size:.74rem">· a free tool by
+      <a href="https://ironsights.com.au" target="_blank" rel="noopener">IronSights</a></span>
+  </div>
+  <div class="disc">ScanCrypt does not break, weaken, or bypass cryptography, and it does not
+    recover fully-encrypted data. It reads its inputs strictly read-only. Provided as is under the
+    Apache License 2.0, without warranty or liability. Use only on systems you are authorised to
+    examine. Copyright 2026 IronSights Pty Ltd.</div>
+</div></footer>
+
+</body>
+</html>

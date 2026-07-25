@@ -1,0 +1,675 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ScanCrypt: recover ransomware-hit data without a key</title>
+<meta name="description" content="ScanCrypt is a free, open-source tool by IronSights. Most ransomware only encrypts part of each large file. ScanCrypt finds the bytes it never touched and reads them back, with no key and no ransom. It is not a decryptor.">
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800;900&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0A0C11; --bg-2:#0d1017; --panel:#12161f; --panel-2:#161b25;
+    --ink:#EDEFF3; --dim:#9AA2B1; --muted:#646c7e;
+    --line:rgba(255,255,255,.075); --line-2:rgba(255,255,255,.12);
+    --sig:#37E28C;            /* signal green: recovered / alive */
+    --sig-dim:#1f9c60;
+    --enc:#FF5A5A;            /* encrypted: the part that is gone */
+    --empty:#2a3242;
+    --display:"Archivo",system-ui,sans-serif;
+    --body:"IBM Plex Sans",system-ui,sans-serif;
+    --mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+    --max:1200px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--dim);font-family:var(--body);
+    font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased}
+  ::selection{background:rgba(55,226,140,.25);color:#fff}
+  a{color:var(--sig);text-decoration:none}
+  a:hover{color:#68f0ab}
+  .wrap{max-width:var(--max);margin:0 auto;padding:0 26px}
+  h1,h2,h3{font-family:var(--display);color:var(--ink);margin:0;letter-spacing:-.02em}
+  h1{font-weight:900;font-size:clamp(2.4rem,6vw,5rem);line-height:.98;letter-spacing:-.04em}
+  h2{font-weight:800;font-size:clamp(1.7rem,3.4vw,2.7rem);line-height:1.05;letter-spacing:-.03em}
+  h3{font-weight:700;font-size:1.06rem}
+  .mono{font-family:var(--mono)}
+  .eyebrow{font-family:var(--mono);font-size:.74rem;font-weight:500;letter-spacing:.06em;
+    text-transform:uppercase;color:var(--sig)}
+  .eyebrow::before{content:"// "}
+
+  /* header */
+  header{position:sticky;top:0;z-index:30;background:rgba(10,12,17,.82);
+    backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+  nav{display:flex;align-items:center;gap:22px;height:64px}
+  .brand{display:flex;align-items:center;gap:11px}
+  .brand .word{font-family:var(--display);font-weight:800;color:var(--ink);font-size:1.16rem;letter-spacing:-.02em}
+  .brand .by{display:flex;align-items:center;margin-left:7px;padding-left:13px;border-left:1px solid var(--line-2)}
+  .brand .by img{height:16px;width:auto;opacity:1}
+  nav .sp{flex:1}
+  nav .lnk{font-family:var(--mono);color:var(--dim);font-size:.82rem}
+  nav .lnk:hover{color:var(--ink)}
+  .btn{display:inline-block;font-family:var(--mono);font-weight:500;font-size:.85rem;
+    padding:.66rem 1.25rem;border-radius:3px;border:1px solid transparent;cursor:pointer;transition:.15s;letter-spacing:.01em}
+  .btn.pri{background:var(--sig);color:#04120a;font-weight:700}
+  .btn.pri:hover{background:#5cf0a6}
+  .btn.gho{border-color:var(--line-2);color:var(--ink)}
+  .btn.gho:hover{border-color:var(--sig);color:var(--sig)}
+
+  /* emergency path: the one element allowed to interrupt, for the visitor who is mid-incident */
+  .er{display:block;background:linear-gradient(90deg,rgba(255,90,90,.14),rgba(255,90,90,.05));
+    border-bottom:1px solid rgba(255,90,90,.3)}
+  .er .in{display:flex;align-items:center;gap:14px;padding:11px 0;font-size:.92rem;color:var(--ink)}
+  .er .pulse{width:9px;height:9px;border-radius:50%;background:var(--enc);flex:none;
+    box-shadow:0 0 0 0 rgba(255,90,90,.5);animation:pulse 1.8s infinite}
+  @keyframes pulse{70%{box-shadow:0 0 0 9px rgba(255,90,90,0)}100%{box-shadow:0 0 0 0 rgba(255,90,90,0)}}
+  @media (prefers-reduced-motion:reduce){.er .pulse{animation:none}}
+  .er b{color:#ff8a8a;font-weight:600}
+  .er .go{margin-left:auto;font-family:var(--mono);font-size:.8rem;color:#ff8a8a;white-space:nowrap}
+  .er:hover .go{color:#ffb3b3}
+
+  section{padding:90px 0;border-top:1px solid var(--line);position:relative}
+  .lede{font-size:1.18rem;color:var(--dim);max-width:42ch}
+  .kicker{max-width:62ch;color:var(--dim);margin:.7rem 0 0}
+
+  /* hero */
+  .hero{padding:104px 0 84px;border-top:none;position:relative;overflow:hidden}
+  .hero::before{content:"";position:absolute;top:-200px;left:50%;transform:translateX(-50%);
+    width:900px;height:520px;background:radial-gradient(ellipse,rgba(55,226,140,.10),transparent 66%);
+    filter:blur(24px);pointer-events:none;z-index:0}
+  /* faint grid confined to the hero, fading out so it reads as atmosphere not wallpaper */
+  .hero::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:0;
+    background-image:linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),
+      linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px);
+    background-size:48px 48px;
+    -webkit-mask-image:radial-gradient(ellipse 90% 80% at 50% 20%,#000 20%,transparent 75%);
+    mask-image:radial-gradient(ellipse 90% 80% at 50% 20%,#000 20%,transparent 75%)}
+  .hero .wrap{position:relative;z-index:1}
+  .hero-grid{display:grid;grid-template-columns:1.02fr .98fr;gap:56px;align-items:center;position:relative}
+  .hero h1{margin:.55rem 0 .6rem}
+  .hero h1 em{font-style:normal;color:var(--sig)}
+  .cta{display:flex;gap:12px;flex-wrap:wrap;margin-top:32px}
+  .fine{font-family:var(--mono);color:var(--muted);font-size:.78rem;margin-top:18px}
+  .reveal{opacity:0;transform:translateY(15px);animation:rise .7s cubic-bezier(.2,.7,.2,1) forwards}
+  .d1{animation-delay:.05s}.d2{animation-delay:.13s}.d3{animation-delay:.22s}.d4{animation-delay:.31s}.d5{animation-delay:.42s}
+  @keyframes rise{to{opacity:1;transform:none}}
+  @media (prefers-reduced-motion:reduce){.reveal{animation:none;opacity:1;transform:none}}
+
+  /* readout panel (signature element) */
+  .panel{background:linear-gradient(180deg,var(--panel),var(--bg-2));border:1px solid var(--line-2);
+    border-radius:8px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.5)}
+  .panel .bar{display:flex;align-items:center;gap:8px;padding:11px 15px;border-bottom:1px solid var(--line);
+    font-family:var(--mono);font-size:.72rem;color:var(--muted)}
+  .panel .bar .dot{width:8px;height:8px;border-radius:50%;background:var(--sig);box-shadow:0 0 8px var(--sig)}
+  .panel pre{margin:0;padding:20px 22px;font-family:var(--mono);font-size:.82rem;line-height:1.85;color:var(--dim);overflow-x:auto}
+  .panel .lbl{color:var(--muted)} .panel .ok{color:var(--sig)} .panel .bad{color:var(--enc)} .panel .hi{color:var(--ink)}
+  /* the entropy readout */
+  .ent{padding:6px 22px 20px}
+  .ent .scale{display:flex;justify-content:space-between;font-family:var(--mono);font-size:.66rem;color:var(--muted);margin-bottom:6px}
+  .strip{display:flex;height:40px;border-radius:4px;overflow:hidden;border:1px solid var(--line-2);background:var(--empty)}
+  .strip span{display:block;position:relative}
+  .strip .e{background:var(--enc);box-shadow:0 0 14px rgba(255,90,90,.5)}
+  .strip .i{background:linear-gradient(90deg,var(--sig-dim),var(--sig))}
+  .strip .z{background:var(--empty)}
+  .lg{display:flex;gap:18px;flex-wrap:wrap;font-family:var(--mono);font-size:.72rem;color:var(--muted);margin-top:11px}
+  .lg i{display:inline-block;width:.7em;height:.7em;border-radius:2px;vertical-align:middle;margin-right:.4em}
+
+  /* stat rail */
+  .rail{display:grid;grid-template-columns:repeat(3,1fr);margin-top:58px;
+    border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--panel)}
+  .rail > div{padding:24px 26px;border-left:1px solid var(--line);position:relative}
+  .rail > div:first-child{border-left:none}
+  .rail .tag{font-family:var(--mono);font-size:.68rem;color:var(--sig);text-transform:uppercase;letter-spacing:.08em}
+  .rail .n{font-family:var(--display);font-weight:800;font-size:1.55rem;color:var(--ink);margin-top:8px;letter-spacing:-.02em}
+  .rail .l{font-size:.92rem;color:var(--muted);margin-top:5px}
+
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:54px;align-items:center}
+
+  /* steps: lab-report numbered flow */
+  .steps{margin-top:36px;border-top:1px solid var(--line)}
+  .step{display:grid;grid-template-columns:74px 1fr;gap:24px;padding:28px 0;border-bottom:1px solid var(--line)}
+  .step .k{font-family:var(--mono);font-weight:700;font-size:1.15rem;color:var(--sig)}
+  .step h3{margin-bottom:.35rem}
+  .step p{margin:0;color:var(--dim)}
+
+  /* families */
+  .chips{display:flex;flex-wrap:wrap;gap:9px;margin-top:22px}
+  .chip{font-family:var(--mono);border:1px solid var(--line-2);border-radius:3px;padding:.4rem .72rem;font-size:.82rem;color:var(--dim);background:var(--panel)}
+  .chip.v{color:var(--ink);border-color:rgba(55,226,140,.45)}
+  .chip.v::before{content:"● ";color:var(--sig);font-size:.7em;vertical-align:middle}
+
+  /* limits */
+  .limits{border:1px solid var(--line);border-left:3px solid var(--enc);border-radius:5px;
+    background:var(--panel);padding:28px 32px}
+  .limits h3{margin-bottom:.7rem}
+  .limits ul{margin:0;padding-left:1.1em;color:var(--dim)}
+  .limits li{margin:.55rem 0}
+
+  /* do-not-pay callout */
+  .nopay{border:1px solid var(--line-2);border-left:3px solid var(--sig);border-radius:5px;
+    background:linear-gradient(135deg,rgba(55,226,140,.06),var(--panel));padding:24px 28px;margin-top:26px}
+  .nopay .k{font-family:var(--mono);font-size:.72rem;color:var(--sig);text-transform:uppercase;letter-spacing:.08em;margin-bottom:9px}
+  .nopay p{margin:0;color:var(--ink);font-size:1.06rem;line-height:1.55}
+  .nopay strong{color:var(--sig)}
+  .who{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:32px}
+  .who > div{background:var(--panel);border:1px solid var(--line);border-radius:5px;padding:26px}
+  .who .num{font-family:var(--mono);font-size:.7rem;color:var(--sig)}
+  .who h3{margin:.5rem 0 .35rem}
+  .who p{margin:0;font-size:.94rem;color:var(--dim)}
+
+  /* paid: the IronSights lead */
+  .paid{border:1px solid var(--line-2);border-radius:10px;padding:0;overflow:hidden;
+    background:linear-gradient(135deg,rgba(55,226,140,.06),var(--panel))}
+  .paid .in{padding:46px}
+  .paid .who-by{display:flex;align-items:center;gap:9px;font-family:var(--mono);font-size:.72rem;color:var(--muted);margin-bottom:18px;text-transform:uppercase;letter-spacing:.06em}
+  .paid .who-by img{height:13px;opacity:.9}
+  .paid h2{margin-bottom:.5rem}
+
+  footer{border-top:1px solid var(--line);padding:46px 0 66px;color:var(--muted);font-size:.9rem}
+  footer .cols{display:flex;flex-wrap:wrap;gap:32px;justify-content:space-between}
+  footer .word{font-family:var(--display);font-weight:800;color:var(--ink);font-size:1.05rem}
+  footer .by{display:flex;align-items:center;gap:7px;margin-top:10px;font-family:var(--mono);font-size:.72rem}
+  footer .by img{height:12px;opacity:.85}
+  footer a{color:var(--dim)} footer a:hover{color:var(--ink)}
+  footer strong{color:var(--ink);font-weight:600;font-family:var(--mono);font-size:.72rem;text-transform:uppercase;letter-spacing:.07em;display:block;margin-bottom:8px}
+  footer .lk a{display:block;margin:5px 0}
+  .disc{margin-top:28px;font-family:var(--mono);font-size:.74rem;line-height:1.7;color:var(--muted);
+    border:1px solid var(--line);border-radius:5px;padding:16px 18px;background:var(--bg-2)}
+
+  /* GUI mockup: a faithful light-theme render of the app, framed in a window. Built in
+     HTML/CSS with neutral example data (no real case), so nothing external is embedded. */
+  .appwrap{display:grid;grid-template-columns:1fr 1.15fr;gap:48px;align-items:center}
+  .win{background:#F5F7FA;border:1px solid #cfd6e0;border-radius:9px;overflow:hidden;
+    box-shadow:0 30px 80px rgba(0,0,0,.55);color:#12151C;font-size:12.5px;line-height:1.5}
+  .win *{box-sizing:border-box}
+  .win .tb{display:flex;align-items:center;justify-content:space-between;background:#e7ebf1;border-bottom:1px solid #cfd6e0;padding:7px 4px 7px 12px}
+  .win .tb .ttl{font-family:var(--display);font-weight:700;font-size:12px;color:#12151C}
+  .win .tb .wc{display:flex;align-items:center}
+  .win .tb .wc i{font-style:normal;font-size:11px;color:#3A4150;width:34px;text-align:center;line-height:20px}
+  .win .tb .wc i.x{color:#12151C}
+  .win .body{padding:14px 16px}
+  .win .menu{display:flex;gap:16px;font-size:11.5px;color:#3A4150;margin-bottom:12px}
+  .win .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+  .win .b{background:#E9EDF2;border:1px solid #C4CBD5;border-radius:3px;padding:4px 10px;font-size:11.5px;color:#12151C;white-space:nowrap}
+  .win .b.grn{background:#37E28C;border-color:#1F9C60;color:#04120A;font-weight:700}
+  .win .b.dis{color:#AAB1BC;background:#F0F2F5;border-color:#DCE0E6}
+  .win .path{font-family:var(--mono);font-size:10.5px;color:#3A4150;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
+  .win .amber{background:#fdf6dd;border:1px solid #e8d48a;color:#8a6d1a;border-radius:3px;padding:6px 9px;font-size:10.5px;margin-bottom:10px}
+  .win .prog{height:16px;border:1px solid #C9D0DA;border-radius:3px;background:#EEF1F5;overflow:hidden;margin-bottom:4px}
+  .win .prog i{display:block;height:100%;width:100%;background:#37E28C}
+  .win .small{font-size:10.5px;color:#3A4150;margin-bottom:12px}
+  .win .verdict{font-family:var(--display);font-weight:800;font-size:15px;color:#2e7d32;margin:4px 0 10px}
+  .win .wstrip{display:flex;height:26px;border:1px solid #C4CBD5;border-radius:3px;overflow:hidden;margin-bottom:6px}
+  .win .wstrip span{display:block}
+  .win .wstrip .e{background:#FF5A5A}.win .wstrip .i{background:#37E28C}.win .wstrip .z{background:#2a3242}
+  .win .wleg{font-family:var(--mono);font-size:10px;color:#3A4150;margin-bottom:12px}
+  .win .wleg i{display:inline-block;width:.65em;height:.65em;border-radius:2px;vertical-align:middle;margin:0 .3em 0 .9em}
+  .win .next{background:#eaf7ef;border:1px solid #b9e4c8;border-radius:4px;padding:9px 11px;font-size:11px;color:#1c3b28;margin-bottom:12px}
+  .win .next b{color:#12151C}
+  .win .detail{background:#fff;border:1px solid #d4dae2;border-radius:3px;padding:9px 11px;font-family:var(--mono);font-size:10px;color:#3A4150;line-height:1.7;margin-bottom:12px}
+  .win .bottom{display:flex;gap:7px;flex-wrap:wrap}
+  .win .bottom .b.hl{outline:2px solid #37E28C;outline-offset:1px}
+
+  /* ---- animated offset maps + a scan that plays out in the app mockup ----
+     JS adds .anim to <html> (so nothing hides if JS is off) and .in when the
+     element scrolls into view. A curtain retracts left->right revealing the map,
+     a bright scanline rides the edge, the red encrypted block softly pulses. */
+  .strip{position:relative}
+  .strip .scan,.win .wstrip .scan{position:absolute;top:-1px;bottom:-1px;width:2px;left:0;z-index:3;
+    background:#eafff4;box-shadow:0 0 16px 5px rgba(55,226,140,.6);opacity:0;pointer-events:none}
+  .strip .curtain,.win .wstrip .curtain{position:absolute;inset:0;z-index:2;transform-origin:right;
+    display:none;pointer-events:none}
+  .strip .curtain{background:var(--empty)}
+  .win .wstrip .curtain{background:#e7ebf1}
+  .anim .strip .curtain,.anim .win .wstrip .curtain{display:block}
+  .anim .strip.in .curtain,.anim .win.in .wstrip .curtain{animation:sc-retract 1.7s cubic-bezier(.45,.5,.15,1) forwards}
+  .anim .strip.in .scan,.anim .win.in .wstrip .scan{animation:sc-sweep 1.7s cubic-bezier(.45,.5,.15,1) forwards}
+  @keyframes sc-retract{to{transform:scaleX(0)}}
+  @keyframes sc-sweep{0%{left:0;opacity:0}6%{opacity:1}90%{opacity:1}100%{left:100%;opacity:0}}
+  .anim .strip.in .e{animation:sc-encpulse 2.6s ease-in-out 1.7s infinite}
+  @keyframes sc-encpulse{0%,100%{filter:brightness(1)}50%{filter:brightness(1.4)}}
+  /* app mockup: progress fills, then the result lines rise in sequence */
+  .anim .win .prog i{width:0}
+  .anim .win.in .prog i{animation:sc-fill 1.55s cubic-bezier(.5,.4,.2,1) forwards}
+  @keyframes sc-fill{to{width:100%}}
+  .anim .win .seq{opacity:0;transform:translateY(6px)}
+  .anim .win.in .seq{animation:sc-rise .5s ease forwards}
+  @keyframes sc-rise{to{opacity:1;transform:none}}
+  .anim .win.in .small{animation-delay:1.3s}
+  .anim .win.in .verdict{animation-delay:1.55s}
+  .anim .win.in .wstrip .curtain,.anim .win.in .wstrip .scan{animation-delay:1.75s}
+  .anim .win.in .wleg{animation-delay:2s}
+  .anim .win.in .next{animation-delay:2.15s}
+  .anim .win.in .detail{animation-delay:2.3s}
+  @media (prefers-reduced-motion:reduce){
+    .anim .strip .curtain,.anim .win .wstrip .curtain{display:none}
+    .strip .scan,.win .wstrip .scan{display:none}
+    .anim .strip.in .e{animation:none}
+    .anim .win .prog i{width:100%}
+    .anim .win .seq{opacity:1;transform:none;animation:none}
+  }
+  .stepnums{counter-reset:sn;margin-top:8px}
+  .stepnums .s{display:grid;grid-template-columns:38px 1fr;gap:14px;padding:14px 0;border-bottom:1px solid var(--line)}
+  .stepnums .s::before{counter-increment:sn;content:counter(sn);font-family:var(--mono);font-weight:700;color:var(--sig);font-size:1.05rem}
+  .stepnums .s h3{margin-bottom:.2rem}.stepnums .s p{margin:0;color:var(--dim);font-size:.95rem}
+  .stepnums code{font-family:var(--mono);font-size:.85em;background:var(--bg-2);border:1px solid var(--line);border-radius:3px;padding:.1em .4em;color:var(--ink)}
+  /* download cards */
+  .dl{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:34px}
+  .dl > div{border:1px solid var(--line-2);border-radius:8px;padding:28px;background:var(--panel)}
+  .dl .rec{border-color:rgba(55,226,140,.45);background:linear-gradient(135deg,rgba(55,226,140,.06),var(--panel))}
+  .dl .k{font-family:var(--mono);font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:var(--sig);margin-bottom:8px}
+  .dl h3{margin-bottom:.4rem}.dl p{color:var(--dim);font-size:.95rem;margin:0 0 16px}
+  .dl .fname{font-family:var(--mono);font-size:.8rem;color:var(--muted)}
+
+  @media (max-width:880px){
+    .hero-grid,.two,.appwrap,.dl{grid-template-columns:1fr;gap:36px}
+    .rail,.who{grid-template-columns:1fr}
+    .rail > div{border-left:none;border-top:1px solid var(--line)}
+    .rail > div:first-child{border-top:none}
+    nav .lnk{display:none}
+    /* let the header wrap so the GitHub button drops under the brand instead of off-screen */
+    nav{flex-wrap:wrap;height:auto;padding:9px 0;gap:8px 16px}
+    nav .sp{display:none}
+    .brand{flex:1 1 100%}
+    .hero::after{background-size:34px 34px}
+    .dl{gap:18px}
+  }
+</style>
+</head>
+<body>
+
+<!-- ScanCrypt mark: scan reticle + entropy bar -->
+<svg width="0" height="0" style="position:absolute"><symbol id="sc-mark" viewBox="0 0 32 32">
+  <path d="M4 10V5a1 1 0 0 1 1-1h5M22 4h5a1 1 0 0 1 1 1v5M28 22v5a1 1 0 0 1-1 1h-5M10 28H5a1 1 0 0 1-1-1v-5"
+        fill="none" stroke="#37E28C" stroke-width="2" stroke-linecap="round"/>
+  <rect x="10" y="14" width="4" height="4" rx="1" fill="#FF5A5A"/>
+  <rect x="15" y="14" width="8" height="4" rx="1" fill="#37E28C"/>
+</symbol></svg>
+
+<header><div class="wrap"><nav>
+  <span class="brand">
+    <svg width="26" height="26"><use href="#sc-mark"/></svg>
+    <span class="word">ScanCrypt</span>
+    <span class="by"><img src="ironsights-logo.svg" alt="IronSights"></span>
+  </span>
+  <span class="sp"></span>
+  <a class="lnk" href="#app">the_app</a>
+  <a class="lnk" href="#how">how_it_works</a>
+  <a class="lnk" href="#families">families</a>
+  <a class="lnk" href="#download">download</a>
+  <a class="btn gho" href="https://github.com/ironsightscyber/scancrypt" target="_blank" rel="noopener">GitHub</a>
+</nav></div></header>
+
+<a class="er" href="recover.html"><div class="wrap"><div class="in">
+  <span class="pulse" aria-hidden="true"></span>
+  <span><b>Been hit and need answers now?</b> There is a plain-English guide for IT staff at an encrypted business: what to do first, and how to check what is recoverable.</span>
+  <span class="go">start_here &rarr;</span>
+</div></div></a>
+
+<div class="hero"><div class="wrap">
+  <div class="hero-grid">
+    <div>
+      <div class="eyebrow reveal d1">an IronSights tool · free &amp; open source</div>
+      <h1 class="reveal d2">Read back the data the ransomware <em>never touched.</em></h1>
+      <p class="lede reveal d3">Most ransomware only scrambles part of each large file, racing to
+        finish before it gets caught. ScanCrypt reads the locked file or disk, works out which bytes
+        it never reached, and pulls them back, with no key and no ransom. It is not a decryptor. It
+        recovers the data that was never encrypted.</p>
+      <div class="cta reveal d4">
+        <a class="btn pri" href="#download">Download the app</a>
+        <a class="btn gho" href="https://github.com/ironsightscyber/scancrypt" target="_blank" rel="noopener">Source and docs</a>
+      </div>
+      <p class="fine reveal d4">a Windows app, no command line needed · read-only, never writes to the scanned file or disk · Apache 2.0 · no warranty</p>
+    </div>
+    <div class="panel reveal d5" aria-label="Example scan of a 100 GB SQL database disk">
+      <div class="bar"><span class="dot"></span>scancrypt · scan readout</div>
+      <pre><span class="lbl">$</span> scancrypt DBDATA_D.vhdx
+<span class="lbl">size       </span> 100.0 GB
+<span class="lbl">pattern    </span> <span class="hi">front-only</span>
+<span class="lbl">recoverable</span> <span class="ok">99.87%</span>   99.9 GB
+<span class="lbl">encrypted  </span> <span class="bad">0.13%</span>    1.0 MB at the front
+<span class="lbl">family     </span> Makop / Phobos  <span class="ok">(confirmed)</span>
+<span class="lbl">integrity  </span> input unchanged (sha256 before = after)</pre>
+      <div class="ent">
+        <div class="scale"><span>offset 0</span><span>end of disk</span></div>
+        <div class="strip"><span class="e" style="width:1.5%"></span><span class="i" style="width:82%"></span><span class="z" style="width:16.5%"></span><i class="scan"></i><i class="curtain"></i></div>
+        <div class="lg"><span><i style="background:var(--enc)"></i>encrypted</span><span><i style="background:var(--sig)"></i>intact, recoverable</span><span><i style="background:var(--empty)"></i>empty</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="rail reveal d5">
+    <div><div class="tag">the maths</div><div class="n">under 1% encrypted</div><div class="l">On a 100 GB file, fast encryption can touch a sliver of the bytes while the whole file gets written off as lost.</div></div>
+    <div><div class="tag">the leverage</div><div class="n">a number before you pay</div><div class="l">"73% of your data, including the database, comes back for free." An evidenced figure changes the conversation.</div></div>
+    <div><div class="tag">the trust</div><div class="n">read-only, audited</div><div class="l">It proves it never altered the evidence, and logs every step in a tamper-evident chain.</div></div>
+  </div>
+</div></div>
+
+<!-- THE APP -->
+<section id="app"><div class="wrap">
+  <div class="appwrap">
+    <div>
+      <div class="eyebrow">a Windows app, not just a command line</div>
+      <h2 style="margin-top:.6rem">Point it at the file. Click Scan. Click Extract.</h2>
+      <p class="kicker" style="margin-bottom:18px">You do not need to touch a terminal. ScanCrypt
+        ships as a single Windows program: download it, double-click, and choose the encrypted
+        file, folder, or disk. It shows you how much is recoverable in a colour map, then pulls
+        the readable files back out for you. There is a command-line version too, for responders
+        who want to script it, but most people never need it.</p>
+      <p class="kicker">It reads Hyper-V and VMware virtual disks (VHDX, VHD, VMDK) and copies your
+        files out with their names and folders, even when the disk will not mount because the
+        ransomware wrecked its header. Scan a single file, or point it at a whole share and get one
+        incident-wide figure with a per-file list.</p>
+      <div class="cta" style="margin-top:26px">
+        <a class="btn pri" href="#download">Download the app</a>
+        <a class="btn gho" href="recover.html">New to this? Start here</a>
+      </div>
+    </div>
+    <div class="reveal d3" aria-label="Illustration of the ScanCrypt desktop app after scanning a virtual disk">
+      <div class="win">
+        <div class="tb"><span class="ttl">⌗ ScanCrypt <span id="mockver">v1.0.0</span></span>
+          <span class="wc"><i>&#8211;</i><i>&#9633;</i><i class="x">&#10005;</i></span></div>
+        <div class="body">
+          <div class="menu"><span>File</span><span>Help</span></div>
+          <div class="row">
+            <span class="b">Choose file / disk image…</span>
+            <span class="b">Scan a folder…</span>
+            <span class="path">D:\VMs\SQL_DATA_D.vhdx</span>
+          </div>
+          <div class="amber">Running without Administrator rights: files and disk images scan fine. A raw drive needs an elevated launch.</div>
+          <div class="row"><span class="b grn">Scan</span><span class="b dis">Cancel</span><span class="b">Scan another file…</span></div>
+          <div class="prog"><i></i></div>
+          <div class="small seq">Rebuilding the disk from its surviving block map… done.</div>
+          <div class="verdict seq">98.6% of this virtual disk is recoverable (137 GB of 140 GB)</div>
+          <div class="wstrip"><span class="e" style="width:1.4%"></span><span class="i" style="width:83%"></span><span class="z" style="width:15.6%"></span><i class="scan"></i><i class="curtain"></i></div>
+          <div class="wleg seq"><i style="background:#FF5A5A"></i>encrypted<i style="background:#37E28C"></i>intact / recoverable<i style="background:#2a3242"></i>empty</div>
+          <div class="next seq"><b>This is a virtual disk (.vhdx). ScanCrypt can read the files straight out of it, even if it will not mount.</b> Best next step: click <b>Extract files from volume</b> and choose an empty destination folder.</div>
+          <div class="detail seq">Ransomware family: Makop / Phobos, confirmed (matched on footer_magic, extension)<br>Disk type: dynamic VHDX, 140 GB, header encrypted, rebuilt from surviving BAT<br>Filesystem: NTFS volume found, 138 files &ge; 1 MB</div>
+          <div class="bottom"><span class="b">Extract recoverable data…</span><span class="b hl">Extract files from volume…</span><span class="b">Save HTML report…</span><span class="b">Carve loose files…</span></div>
+        </div>
+      </div>
+      <p class="fine" style="text-align:center;margin-top:12px">Illustration with example data. No real case is shown.</p>
+    </div>
+  </div>
+</div></section>
+
+<!-- THE GAP -->
+<section id="gap"><div class="wrap">
+  <div class="two">
+    <div>
+      <div class="eyebrow">the gap it fills</div>
+      <h2 style="margin-top:.6rem">Somebody finally answers "how much can I get back?"</h2>
+      <p class="kicker">When ransomware hits, No More Ransom and ID-Ransomware name the strain and hand
+        you a decryptor if a key exists. Usually one does not. Generic file carvers are not
+        ransomware-aware, so they trip over the encrypted regions and carve garbage. Recovery firms do
+        the work by hand, slowly, at a price. The question a victim asks first went unanswered: how
+        much can I get back right now? ScanCrypt answers it, before anyone weighs up a payment.</p>
+    </div>
+    <div class="panel" aria-label="A recovered SQL log">
+      <div class="bar"><span class="dot"></span>case · ACME transaction log · 16 GB</div>
+      <pre><span class="lbl"># the ransom note said the whole file was gone</span>
+scan:
+  first 4 MB   <span class="bad">encrypted</span>
+  next 16 GB   <span class="ok">intact</span>   24/24 spot checks clean
+result: full transaction log read back.</pre>
+      <div class="ent">
+        <div class="strip"><span class="e" style="width:3%"></span><span class="i" style="width:97%"></span><i class="scan"></i><i class="curtain"></i></div>
+      </div>
+    </div>
+  </div>
+</div></section>
+
+<!-- HOW -->
+<section id="how"><div class="wrap">
+  <div class="eyebrow">how it works</div>
+  <h2 style="margin-top:.6rem">Four stages, all read-only</h2>
+  <p class="kicker">A triage step you run before you consider paying, and a recovery tool once you decide to.</p>
+  <div class="steps">
+    <div class="step"><div class="k">01</div><div>
+      <h3>Map the encryption</h3>
+      <p>An entropy scan finds where the encryption starts and stops, then refines down to the byte.
+      A coarse pass can miss a short encrypted region and write off a disk that was almost entirely
+      fine. Getting that wrong is the mistake ScanCrypt was built to prevent. It stays fast on the
+      files that matter, a 300 GB virtual disk is measured in seconds, not read end to end.</p>
+    </div></div>
+    <div class="step"><div class="k">02</div><div>
+      <h3>Tell ciphertext from compression</h3>
+      <p>Encrypted data and compressed data both look random, so entropy alone confuses them.
+      ScanCrypt runs a chi-square test, and reads the file's own archive headers, to separate real
+      ciphertext from an ordinary zip, image, or database blob. That way it does not write off data
+      that was never locked.</p>
+    </div></div>
+    <div class="step"><div class="k">03</div><div>
+      <h3>Report the number</h3>
+      <p>You get a standalone HTML report: the recoverable percentage, a map of the file, the strain,
+      and the limits stated plainly. Point it at a whole share and it rolls the lot up into one figure
+      and a per-file list you can hand to a client or an insurer. When part of a disk did not survive,
+      the file list is marked partial, never passed off as the whole picture.</p>
+    </div></div>
+    <div class="step"><div class="k">04</div><div>
+      <h3>Recover the data</h3>
+      <p>Extract the intact byte ranges. Pull files out of a Hyper-V or VMware virtual disk (VHDX,
+      VHD, VMDK) with their names and folders, even one whose header the ransomware destroyed, by
+      rebuilding it from the block map that survived. Check a recovered SQL database page by page.
+      Carve loose files with PhotoRec. Every step records hashes as it goes.</p>
+    </div></div>
+  </div>
+</div></section>
+
+<!-- FAMILIES -->
+<section id="families"><div class="wrap">
+  <div class="eyebrow">strain identification</div>
+  <h2 style="margin-top:.6rem">It names the families that leave data behind</h2>
+  <p class="kicker">ScanCrypt names the strain when it can, from the file extension, an appended marker,
+    or the ransom note. Naming it never changes what comes back, so recovery still works on a family it
+    has never seen. We also say how sure we are: confirmed against a real sample, or taken from public
+    reporting. We do not invent signatures.</p>
+  <div class="chips">
+    <span class="chip v">Makop / Phobos</span>
+    <span class="chip">LockBit 2.0</span>
+    <span class="chip">BlackBasta</span>
+    <span class="chip">Play</span>
+    <span class="chip">Royal</span>
+    <span class="chip">Akira</span>
+    <span class="chip">Conti</span>
+    <span class="chip">Medusa</span>
+  </div>
+  <p class="fine" style="margin-top:20px">the dot marks a family confirmed against a real sample. the rest come from public threat reporting, and say so in the report.</p>
+
+  <div style="margin-top:24px;border:1px solid var(--line-2);border-left:3px solid var(--sig);border-radius:6px;background:linear-gradient(135deg,rgba(55,226,140,.06),var(--panel));padding:22px 26px">
+    <div class="eyebrow" style="margin-bottom:10px">hit by a strain we don't name?</div>
+    <p class="kicker" style="margin:0 0 16px">Help ScanCrypt recognise it. Run one command on a single
+      encrypted file and it prints a ready-to-submit fingerprint, the extension, the family's
+      marker bytes, the encryption pattern, and any ransom note. <b>Metadata only: no file
+      contents are read or sent</b>, so it is safe for a victim to share.</p>
+    <div class="panel" style="margin:0 0 16px"><pre style="margin:0"><span class="lbl">$</span> scancrypt DBDATA_D.newcrypt <span class="hi">--fingerprint</span>
+<span class="lbl">extension  </span> .newcrypt
+<span class="lbl">pattern    </span> front-only
+<span class="lbl">note       </span> HOW-TO-DECRYPT.txt
+<span class="ok">→ ready-to-paste signature + a pre-filled submission form</span></pre></div>
+    <a class="btn gho" href="https://github.com/ironsightscyber/scancrypt/issues/new?template=ransomware-sample.yml" target="_blank" rel="noopener">Submit a family &rarr;</a>
+  </div>
+</div></section>
+
+<!-- DOWNLOAD -->
+<section id="download"><div class="wrap">
+  <div class="eyebrow">download and get started</div>
+  <h2 style="margin-top:.6rem">Free to download. Nothing to sign up for.</h2>
+  <p class="kicker">ScanCrypt is a single Windows program with nothing to install. It runs fully
+    offline, so you can carry it on a USB stick to an isolated machine, and it never sends your
+    data anywhere.</p>
+
+  <div class="dl">
+    <div class="rec">
+      <div class="k">recommended for most people</div>
+      <h3>ScanCrypt (app)</h3>
+      <p>The point-and-click Windows app. Scan a file, folder, or disk and recover files without
+        ever opening a terminal.</p>
+      <div class="cta">
+        <a class="btn pri" href="https://github.com/ironsightscyber/scancrypt/releases/latest" target="_blank" rel="noopener">Download for Windows</a>
+        <a class="btn gho" href="https://github.com/ironsightscyber/scancrypt/releases/latest" target="_blank" rel="noopener">Download for macOS</a>
+      </div>
+      <p class="fname" style="margin-top:12px">scancrypt-gui.exe (Windows) · scancrypt-macos.zip (macOS) · latest release <span id="latestver">v1.0.0</span></p>
+    </div>
+    <div>
+      <div class="k">for responders and scripting</div>
+      <h3>ScanCrypt (command line)</h3>
+      <p>A slim console version for DFIR workflows: scriptable, with hash-chained audit logs and
+        incident-wide batch reports.</p>
+      <div class="cta">
+        <a class="btn gho" href="https://github.com/ironsightscyber/scancrypt/releases/latest" target="_blank" rel="noopener">Get the CLI</a>
+      </div>
+      <p class="fname" style="margin-top:12px">scancrypt.exe · about 21 MB</p>
+    </div>
+  </div>
+
+  <h3 style="margin-top:44px">Getting started with the app</h3>
+  <div class="stepnums">
+    <div class="s"><div>
+      <h3>Download it on a clean computer</h3>
+      <p>Grab <code>scancrypt-gui.exe</code> from the releases page on a machine that was not
+        infected. Move it across on a USB stick if the affected network is isolated.</p>
+    </div></div>
+    <div class="s"><div>
+      <h3>Double-click to run</h3>
+      <p>Because the app is new and not yet code-signed, your system may warn about an unrecognised
+        app. On Windows, click <b>More info</b> then <b>Run anyway</b>. On macOS, right-click the app
+        and choose <b>Open</b>. Every release is built in the open from the public source on GitHub.</p>
+    </div></div>
+    <div class="s"><div>
+      <h3>Choose what to scan</h3>
+      <p>Click <b>Choose file / disk image</b> and pick your encrypted file, virtual disk, or backup,
+        or drag it onto the window. Use <b>Scan a folder</b> to measure a whole share at once.</p>
+    </div></div>
+    <div class="s"><div>
+      <h3>Scan, then recover</h3>
+      <p>Click <b>Scan</b>. In under a minute you get a recoverable percentage and a colour map. Then
+        <b>Extract files from volume</b> for a virtual disk, or <b>Extract recoverable data</b> for a
+        single file. The app tells you the best next step for what it found.</p>
+    </div></div>
+  </div>
+
+  <div class="nopay" style="margin-top:30px">
+    <div class="k">before you pay</div>
+    <p><strong>Do not pay the ransom.</strong> Find out what you can recover for free first, and check
+      the <a href="https://www.nomoreransom.org" target="_blank" rel="noopener">No More Ransom project</a>
+      for a free decryptor. New to responding to ransomware?
+      <a href="recover.html">Read the plain-English guide.</a></p>
+  </div>
+</div></section>
+
+<!-- LIMITS -->
+<section id="limits"><div class="wrap">
+  <div class="limits">
+    <h3>What it will not do, said plainly</h3>
+    <ul>
+      <li>It is not decryption. It recovers the bytes that were never encrypted. The rest stays locked without the key.</li>
+      <li>Recovery is most, not all. The report gives you the measured figure, never a promise that every file opens cleanly.</li>
+      <li>Small files are usually encrypted end to end. The data worth recovering sits in big files: databases, VM disks, backups, media.</li>
+      <li>It comes with no warranty and no liability. Run it only on systems you are allowed to examine.</li>
+    </ul>
+  </div>
+</div></section>
+
+<!-- RESPONDERS -->
+<section id="responders"><div class="wrap">
+  <div class="eyebrow">for incident responders and the community</div>
+  <h2 style="margin-top:.6rem">Built to hand out on day one, and to give back</h2>
+  <div class="nopay">
+    <div class="k">before you pay</div>
+    <p><strong>Do not pay the ransom.</strong> Paying is never a guarantee that you get your
+      files back, and every payment funds the group to go after the next victim. Find out
+      what you can recover for free first. For help responding without paying, visit the
+      <a href="https://www.nomoreransom.org" target="_blank" rel="noopener">No More Ransom project</a>.</p>
+  </div>
+  <div class="who">
+    <div><div class="num">01</div><h3>Give victims a number</h3><p>A free triage scan replaces "everything is gone" with an evidenced figure, before the pressure to pay sets in.</p></div>
+    <div><div class="num">02</div><h3>Open to <a href="https://www.nomoreransom.org" target="_blank" rel="noopener">No More Ransom</a></h3><p>Offered as a free community resource. The methodology and the signatures are open to read, reuse, and improve.</p></div>
+    <div><div class="num">03</div><h3>Fits a DFIR workflow</h3><p>Command-line, scriptable, read-only, with hash-chained audit logs. It slots into an evidence chain the way SANS handlers expect.</p></div>
+  </div>
+</div></section>
+
+<!-- PAID: IRONSIGHTS LEAD -->
+<section id="help"><div class="wrap">
+  <div class="paid"><div class="in">
+    <div class="who-by">from the team that built it · <img src="ironsights-logo.svg" alt="IronSights"></div>
+    <h2>The scan says it is recoverable. Want it handled?</h2>
+    <p class="kicker" style="margin-bottom:1.5rem">ScanCrypt gives you the number and the method for
+      nothing. If you would rather hand it over, IronSights does the full job: extraction, database
+      rebuilds, forensic reporting, and the incident response around it. That part is a paid
+      engagement. The tool stays free.</p>
+    <div class="cta">
+      <a class="btn pri" href="https://ironsights.com.au/contact" target="_blank" rel="noopener">Talk to IronSights IR</a>
+      <a class="btn gho" href="https://ironsights.com.au" target="_blank" rel="noopener">ironsights.com.au</a>
+    </div>
+  </div></div>
+</div></section>
+
+<footer><div class="wrap">
+  <div class="cols">
+    <div style="max-width:36ch">
+      <div style="display:flex;align-items:center;gap:10px">
+        <svg width="22" height="22"><use href="#sc-mark"/></svg>
+        <span class="word">ScanCrypt</span>
+      </div>
+      <div class="by"><span style="color:var(--muted)">created and maintained by</span>
+        <a href="https://ironsights.com.au"><img src="ironsights-logo.svg" alt="IronSights"></a></div>
+      <p style="margin:.7rem 0 0;color:var(--muted)">Free and open source, Apache 2.0. IronSights is an Australian cyber security company.</p>
+    </div>
+    <div class="lk">
+      <strong>Project</strong>
+      <a href="https://github.com/ironsightscyber/scancrypt" target="_blank" rel="noopener">Source on GitHub</a>
+      <a href="https://github.com/ironsightscyber/scancrypt/releases" target="_blank" rel="noopener">Download</a>
+      <a href="https://github.com/ironsightscyber/scancrypt/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">Contribute a signature</a>
+    </div>
+    <div class="lk">
+      <strong>Contact</strong>
+      <a href="https://ironsights.com.au/services/incident-response" target="_blank" rel="noopener">Incident response</a>
+      <a href="https://ironsights.com.au/security-disclosure" target="_blank" rel="noopener">Security reports</a>
+      <a href="https://ironsights.com.au" target="_blank" rel="noopener">ironsights.com.au</a>
+    </div>
+  </div>
+  <div class="disc">ScanCrypt does not break, weaken, or bypass cryptography, and it does not recover
+    fully-encrypted data. It reads its inputs strictly read-only. Provided as is under the Apache
+    License 2.0, without warranty or liability. Use only on systems you are authorised to examine.
+    Copyright 2026 IronSights Pty Ltd.</div>
+</div></footer>
+
+<script>
+  // Show the real latest release version, so it stays current without editing the page on
+  // every release. Reads the public GitHub release tag; the hardcoded text is the fallback
+  // if the request is blocked or offline.
+  fetch("https://api.github.com/repos/ironsightscyber/scancrypt/releases/latest")
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (d) {
+      if (!d || !d.tag_name) return;
+      var v = d.tag_name;
+      ["latestver", "mockver"].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) el.textContent = v;
+      });
+    })
+    .catch(function () { /* keep the fallback version already in the page */ });
+
+  // Scroll-triggered scan animation for the offset maps and the app mockup. We only opt in
+  // (add .anim) when JS is running, so with JS off nothing is hidden behind a curtain.
+  (function () {
+    document.documentElement.classList.add("anim");
+    var targets = document.querySelectorAll(".strip, .win");
+    if (!("IntersectionObserver" in window)) {
+      targets.forEach(function (el) { el.classList.add("in"); });   // no IO: just show them
+      return;
+    }
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); }
+      });
+    }, { threshold: 0.35 });
+    targets.forEach(function (el) { io.observe(el); });
+  })();
+</script>
+
+</body>
+</html>

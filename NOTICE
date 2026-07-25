@@ -1,0 +1,14 @@
+ScanCrypt, ransomware partial-recovery tool
+Copyright 2026 IronSights Pty Ltd
+
+This product includes software developed by IronSights Pty Ltd
+(https://ironsights.com.au).
+
+Licensed under the Apache License, Version 2.0. See the LICENSE file.
+
+ScanCrypt recovers the portions of ransomware-encrypted files that were never
+actually encrypted. It is NOT a decryptor and does not break, weaken, or bypass
+any cryptography. It reads evidence strictly read-only and never modifies the
+files or devices it scans. It is provided free of charge and AS IS, without
+warranty of any kind and without liability, for lawful use on systems the
+operator is authorized to examine.

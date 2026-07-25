@@ -1,0 +1,26 @@
+# Keeps dependencies patched once the repo is public. Dependabot opens PRs for outdated
+# packages; CI (test + build) runs on each, so an update only merges if it still passes.
+# Security-only updates are additionally auto-enabled by GitHub on public repos.
+version: 2
+updates:
+  # Python dependencies declared in pyproject.toml (PySide6, numpy, PyYAML, dissect.ntfs, ...)
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels: ["dependencies"]
+    groups:
+      # Bundle routine minor/patch bumps into one PR to cut noise; majors stay separate
+      # so they get individual review.
+      python-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
+  # The actions used in the CI workflow (checkout, setup-python, upload-artifact,
+  # action-gh-release) -- these ship security fixes too and should not drift.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels: ["dependencies", "github-actions"]

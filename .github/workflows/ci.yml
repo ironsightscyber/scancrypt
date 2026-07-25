@@ -1,0 +1,158 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev]"
+      - run: pytest -q
+
+  build-exe:
+    needs: test
+    runs-on: windows-latest
+    permissions:
+      contents: write   # required for the release-attach step to create/update a release
+    # Surfacing the token as a job env lets the signing steps gate on it: secrets cannot
+    # be referenced directly in an `if:` condition, but env vars can. Empty == signing off.
+    env:
+      SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev]"
+
+      # Release gate: a tagged build must match the package version exactly (tag v1.2.3 ==
+      # rprt.__version__ "1.2.3"). This is what stops a stale __init__.py version from ever
+      # shipping in a release exe or its report footer.
+      - name: Version gate (tag must match rprt.__version__)
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg="$(python -c 'import rprt; print(rprt.__version__)')"
+          if [ "$tag" != "$pkg" ]; then
+            echo "::error::Tag v$tag does not match rprt.__version__ ($pkg). Bump src/rprt/__init__.py before tagging."
+            exit 1
+          fi
+          echo "version gate ok: $pkg"
+
+      - run: python build_scripts/build_cli.py       # slim console exe (no Qt)
+      - run: python build_scripts/build_windows.py    # full GUI exe
+
+      # --- Code signing (SignPath Foundation) ---------------------------------------------
+      # DORMANT until the SignPath side exists. If SIGNPATH_API_TOKEN is empty these steps
+      # are skipped and unsigned exes ship exactly as they do today. Signing runs only on
+      # release tags (Foundation quota is per-request; every-push signing would burn it).
+      # To turn signing on, after SignPath Foundation approves the project:
+      #   1. In SignPath: create the project (slug "scancrypt"), an artifact configuration
+      #      describing a zip containing the two Windows PE files (GitHub artifacts are
+      #      zips), a "release-signing" policy, and link the GitHub Actions trusted build
+      #      system to this repository.
+      #   2. Add repo secret  SIGNPATH_API_TOKEN   (a CI user token from SignPath)
+      #      Add repo variable SIGNPATH_ORG_ID     (the organization GUID from SignPath)
+      # Note: release-signing policies typically require a manual approval in the SignPath
+      # UI per request; the submit step waits for it, so approve promptly after tagging.
+      - name: Upload unsigned exes for signing
+        id: unsigned
+        if: ${{ env.SIGNPATH_API_TOKEN != '' && startsWith(github.ref, 'refs/tags/v') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-exes
+          retention-days: 1
+          path: |
+            dist/scancrypt.exe
+            dist/scancrypt-gui.exe
+      - name: Submit SignPath signing request
+        if: ${{ env.SIGNPATH_API_TOKEN != '' && startsWith(github.ref, 'refs/tags/v') }}
+        uses: signpath/github-action-submit-signing-request@v1.2   # verify latest when enabling
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORG_ID }}
+          project-slug: scancrypt
+          signing-policy-slug: release-signing
+          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: dist-signed
+      - name: Replace exes with the signed versions
+        if: ${{ env.SIGNPATH_API_TOKEN != '' && startsWith(github.ref, 'refs/tags/v') }}
+        shell: bash
+        run: |
+          cp -f dist-signed/scancrypt.exe dist-signed/scancrypt-gui.exe dist/
+          ls -lh dist/*.exe
+
+      - name: Report exe sizes
+        shell: bash
+        run: ls -lh dist/*.exe
+      # Upload run artifacts only on release tags, with short retention. On every-push builds
+      # these 121 MB uploads pile up and exhaust the Actions storage quota. continue-on-error
+      # so that if the quota is hit anyway, it never blocks the actual release attachment below
+      # (the exes still reach users via the GitHub Release, which is separate storage).
+      - uses: actions/upload-artifact@v4
+        if: startsWith(github.ref, 'refs/tags/v')
+        continue-on-error: true
+        with:
+          name: scancrypt-windows
+          retention-days: 14
+          path: |
+            dist/scancrypt.exe
+            dist/scancrypt-gui.exe
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/scancrypt.exe
+            dist/scancrypt-gui.exe
+
+  build-macos:
+    needs: test
+    runs-on: macos-latest
+    permissions:
+      contents: write   # required to attach the app to a release
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev]"
+      # Same release gate as Windows: a tagged build must match rprt.__version__.
+      - name: Version gate (tag must match rprt.__version__)
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg="$(python -c 'import rprt; print(rprt.__version__)')"
+          if [ "$tag" != "$pkg" ]; then
+            echo "::error::Tag v$tag does not match rprt.__version__ ($pkg)."
+            exit 1
+          fi
+      - run: python build_scripts/make_icon.py    # emits assets/scancrypt.icns
+      - run: python build_scripts/build_macos.py   # dist/ScanCrypt.app
+      - name: Zip the app bundle
+        run: ditto -c -k --keepParent dist/ScanCrypt.app dist/scancrypt-macos.zip
+      - uses: actions/upload-artifact@v4
+        if: startsWith(github.ref, 'refs/tags/v')
+        continue-on-error: true
+        with:
+          name: scancrypt-macos
+          retention-days: 14
+          path: dist/scancrypt-macos.zip
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/scancrypt-macos.zip

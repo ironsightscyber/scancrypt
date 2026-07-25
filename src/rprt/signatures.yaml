@@ -1,0 +1,111 @@
+# ScanCrypt ransomware-family signature table.
+#
+# This is the file to edit when contributing a family. It is plain data, so you do not
+# need to touch any Python. The engine loads it at startup, and a future rewrite in another
+# language would load the very same file, so contributions here are never wasted.
+#
+# THE RULES (a validator in CI enforces these, so a PR that breaks them fails):
+#   1. Never fabricate. If you have not measured it, leave it out. A wrong footer_magic or a
+#      guessed encrypted-fraction produces false identifications, which is worse than none.
+#   2. Mark provenance honestly:
+#        validated        - you confirmed this against a real sample yourself.
+#        public-reporting - taken from published threat intel, not verified here.
+#      footer_magic and typical_max_encrypted_fraction are only allowed on "validated" rows.
+#   3. Family-level indicators only. No victim-specific data: no attacker contact addresses,
+#      no victim IDs, no keys, no content lifted from one victim's files or note. note_markers
+#      must be the reusable template phrasing a family reuses across victims.
+#   4. Only stable identifiers. Skip families that randomise the extension per victim
+#      (BlackCat/ALPHV, LockBit 3.0 "Black", Qilin), since no honest signature would match
+#      them. Recovery still works on them; naming the strain is a separate thing.
+#
+# FIELDS
+#   name                            required. Display name of the family.
+#   extension_regex                 regex matched against the encrypted filename (anchored).
+#   footer_magic                    hex string of a fixed trailer marker (validated rows only).
+#   large_file_pattern              front-only | periodic-intermittent | configurable | full | unknown
+#   appends_trailer                 bool (default true).
+#   typical_max_encrypted_fraction  0..1, the family's intended encrypted extent (validated only).
+#   provenance                      validated | public-reporting (default public-reporting).
+#   note_name_regex                 ransom-note filename regex, only if distinctive (not readme.txt).
+#   note_markers                    list of distinctive, family-generic note phrases.
+#   notes                           free text: how it was confirmed, behaviour, caveats.
+
+families:
+  - name: "Makop/Phobos (.ndm448 variant)"
+    provenance: validated
+    extension_regex: '\.ndm448$'
+    footer_magic: "89ce296df32e5921"
+    large_file_pattern: front-only
+    typical_max_encrypted_fraction: 0.34   # encryptor computes file_size / 3
+    note_name_regex: '^\+README-WARNING\+\.txt$'
+    note_markers:
+      # Distinctive Makop template phrasings from a real note sample, reused verbatim
+      # across Makop campaigns. Family markers, not victim-specific.
+      - "THE FOLLOWING IS STRICTLY FORBIDDEN"
+      - "DAMAGE the cipher"
+      - "EDITING FILES ON HDD"
+    notes: >-
+      Hybrid AES + RSA-1024 (CryptoAPI). Per-file RSA-wrapped key trailer (128 bytes) ends in
+      the 8-byte magic, preceded by a CRC32. Small files fully encrypted; large files get a
+      bounded encrypted front (intended extent ~1/3, usually interrupted far short) with the
+      remainder intact, the partial-recovery case. Encryption is in place, so intact bytes
+      past the boundary sit at their original offsets. Drops +README-WARNING+.txt.
+
+  - name: "LockBit 2.0"
+    extension_regex: '\.lockbit$'
+    large_file_pattern: periodic-intermittent
+    note_name_regex: 'restore-my-files\.txt$'
+    notes: >-
+      Public reporting: an early popular adopter of intermittent ('fast') encryption on large
+      files. Extension .lockbit is stable for 2.0; LockBit 3.0 'Black' assigns a random
+      per-victim extension and is not matched here. Note: Restore-My-Files.txt.
+
+  - name: "BlackBasta"
+    extension_regex: '\.basta$'
+    large_file_pattern: periodic-intermittent
+    # note filename (readme.txt) is too generic to identify a family, so not used
+    notes: >-
+      Public reporting: encrypts large files in chunks with regular gaps (reported ~64-byte
+      encrypted stretches at fixed intervals above a size threshold), leaving much of a big
+      file intact, a strong partial-recovery candidate. Extension .basta.
+
+  - name: "Play (PlayCrypt)"
+    extension_regex: '\.play$'
+    large_file_pattern: periodic-intermittent
+    # note filename (ReadMe.txt) is too generic to identify a family, so not used
+    notes: >-
+      Public reporting: intermittent encryption of portions of each file; appends the .play
+      extension.
+
+  - name: "Royal"
+    extension_regex: '\.royal$'
+    large_file_pattern: configurable
+    note_name_regex: 'readme\.royal\.txt$'
+    notes: >-
+      Public reporting: operator-selectable partial-encryption percentage per file, which
+      lowers the encrypted fraction on large files. Extension .royal (also seen: .royal_w /
+      .royal_u). Because the percentage is configurable, no fixed intended-extent is assumed.
+      Note: README.royal.txt.
+
+  - name: "Akira"
+    extension_regex: '\.akira$'
+    large_file_pattern: configurable
+    note_name_regex: 'akira_readme\.txt$'
+    notes: >-
+      Public reporting: partial/percentage-based encryption on larger files (Rust and C++
+      builds). Extension .akira (megazord variant: .powerranges). Note: akira_readme.txt.
+
+  - name: "Conti"
+    extension_regex: '\.conti$'
+    large_file_pattern: periodic-intermittent
+    notes: >-
+      Public reporting: an originator of intermittent encryption; skips regions of large files
+      for speed. Extension varies (.CONTI common); note Conti also used random 5-char
+      extensions in some builds.
+
+  - name: "Medusa (MedusaLocker family)"
+    extension_regex: '\.medusa$'
+    large_file_pattern: periodic-intermittent
+    notes: >-
+      Public reporting: intermittent encryption on large files. Extension varies across
+      MedusaLocker builds (.medusa among them).

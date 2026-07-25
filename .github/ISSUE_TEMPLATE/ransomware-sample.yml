@@ -1,0 +1,86 @@
+name: "Ransomware family / new signature"
+description: "Help ScanCrypt recognise a strain it doesn't name yet. Metadata only — do NOT attach encrypted files."
+title: "New family: <extension>"
+labels: ["signature", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping ScanCrypt recognise more strains.
+
+        **The easy way:** run `scancrypt --fingerprint <one-encrypted-file>` and paste what it
+        prints. It fills in most of this form for you and reads **no file contents** — just the
+        extension, a few trailing bytes, the encryption pattern, and any nearby ransom note.
+
+        **⚠️ Please do NOT attach or paste encrypted files, ransom notes, keys, or anything
+        victim-specific.** We only need the family-level markers below. If a real sample is ever
+        needed, a maintainer will arrange a safe, private channel — never a public issue.
+  - type: input
+    id: extension
+    attributes:
+      label: Encrypted file extension
+      description: The extension the ransomware appends, e.g. `.ndm448`.
+      placeholder: ".example"
+    validations:
+      required: true
+  - type: dropdown
+    id: pattern
+    attributes:
+      label: Large-file encryption pattern (from --fingerprint / the scan)
+      options:
+        - unknown
+        - front-only
+        - periodic-intermittent
+        - configurable
+        - full
+    validations:
+      required: true
+  - type: input
+    id: footer_hex
+    attributes:
+      label: Trailing bytes (hex)
+      description: >-
+        The "magic candidate" hex from `--fingerprint` (the last few bytes of an encrypted
+        file). A fixed value shared across several encrypted files is the family's footer magic.
+      placeholder: "89ce296df32e5921"
+  - type: input
+    id: note_filename
+    attributes:
+      label: Ransom-note filename
+      description: The name of the note the ransomware drops, if any, e.g. `+README-WARNING+.txt`.
+      placeholder: "README.txt"
+  - type: textarea
+    id: note_markers
+    attributes:
+      label: Distinctive ransom-note phrases (optional)
+      description: >-
+        A few sentences the note reuses across victims (template phrasing) — NOT the attacker's
+        contact address, victim ID, or anything unique to one victim.
+      placeholder: |
+        e.g. "THE FOLLOWING IS STRICTLY FORBIDDEN"
+  - type: input
+    id: boundary
+    attributes:
+      label: Observed encrypted extent (optional)
+      description: What `--fingerprint` reported, e.g. `0.0002% of 108.5 GB`.
+  - type: input
+    id: family_name
+    attributes:
+      label: Family name, if you know it (optional)
+      description: From the ransom note, No More Ransom / ID-Ransomware, or public reporting.
+  - type: dropdown
+    id: sample_offer
+    attributes:
+      label: If a maintainer needs more to confirm this
+      options:
+        - "I can run --fingerprint on more files and paste the output"
+        - "I can share the ransom note + footer bytes privately (no victim data)"
+        - "I'd rather a maintainer contact me to arrange it"
+        - "Fingerprint output is all I can share"
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: Confirmation
+      options:
+        - label: "I have NOT attached encrypted files, keys, or victim-specific data to this issue."
+          required: true
