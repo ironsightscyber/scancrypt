@@ -5,6 +5,19 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Hit by ransomware? Start here | ScanCrypt</title>
 <meta name="description" content="A plain-English guide for IT staff at a business hit by ransomware: what to do in the first hour, and how to use ScanCrypt to find out how much of your data is recoverable without paying.">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://scancrypt.org/recover.html">
+<meta property="og:site_name" content="ScanCrypt">
+<meta property="og:title" content="Hit by ransomware? Start here">
+<meta property="og:description" content="What to do in the first hour, and how to find out — for free — how much of your data can come back without paying anyone.">
+<meta property="og:image" content="https://scancrypt.org/social-card.png">
+<meta property="og:image:width" content="1774">
+<meta property="og:image:height" content="887">
+<meta property="og:image:alt" content="ScanCrypt: read back the data the ransomware never touched. A scan readout showing a disk 99.87% recoverable.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Hit by ransomware? Start here">
+<meta name="twitter:description" content="What to do in the first hour, and how to find out — for free — how much of your data can come back without paying anyone.">
+<meta name="twitter:image" content="https://scancrypt.org/social-card.png">
 <link rel="icon" type="image/png" href="favicon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -103,6 +116,14 @@
     .facts{grid-template-columns:1fr}
     .stp{grid-template-columns:40px 1fr;gap:14px}
     nav .lnk{display:none}
+  }
+  /* keep the header one row with the Download button on screen: compact the
+     brand and button on small phones (IronSights stays in the footer credit) */
+  @media (max-width:540px){
+    nav{gap:8px}
+    .brand{gap:9px}
+    .brand .by{display:none}
+    nav .btn{padding:.55rem .8rem;font-size:.8rem}
   }
 </style>
 </head>

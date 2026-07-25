@@ -5,6 +5,19 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ScanCrypt: recover ransomware-hit data without a key</title>
 <meta name="description" content="ScanCrypt is a free, open-source tool by IronSights. Most ransomware only encrypts part of each large file. ScanCrypt finds the bytes it never touched and reads them back, with no key and no ransom. It is not a decryptor.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://scancrypt.org/">
+<meta property="og:site_name" content="ScanCrypt">
+<meta property="og:title" content="ScanCrypt: recover ransomware-hit data without a key">
+<meta property="og:description" content="Most ransomware only encrypts part of each large file. ScanCrypt finds the bytes it never touched and reads them back — free, open source, read-only.">
+<meta property="og:image" content="https://scancrypt.org/social-card.png">
+<meta property="og:image:width" content="1774">
+<meta property="og:image:height" content="887">
+<meta property="og:image:alt" content="ScanCrypt: read back the data the ransomware never touched. A scan readout showing a disk 99.87% recoverable.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="ScanCrypt: recover ransomware-hit data without a key">
+<meta name="twitter:description" content="Most ransomware only encrypts part of each large file. ScanCrypt finds the bytes it never touched and reads them back — free, open source, read-only.">
+<meta name="twitter:image" content="https://scancrypt.org/social-card.png">
 <link rel="icon" type="image/png" href="favicon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -57,6 +70,8 @@
   .btn.pri:hover{background:#5cf0a6}
   .btn.gho{border-color:var(--line-2);color:var(--ink)}
   .btn.gho:hover{border-color:var(--sig);color:var(--sig)}
+  .ghlink{display:inline-flex;align-items:center;gap:.5em}
+  .gh-ico{display:none;flex:none}
 
   /* emergency path: the one element allowed to interrupt, for the visitor who is mid-incident */
   .er{display:block;background:linear-gradient(90deg,rgba(255,90,90,.14),rgba(255,90,90,.05));
@@ -70,7 +85,7 @@
   .er .go{margin-left:auto;font-family:var(--mono);font-size:.8rem;color:#ff8a8a;white-space:nowrap}
   .er:hover .go{color:#ffb3b3}
 
-  section{padding:90px 0;border-top:1px solid var(--line);position:relative}
+  section{padding:90px 0;border-top:1px solid var(--line);position:relative;scroll-margin-top:72px}
   .lede{font-size:1.18rem;color:var(--dim);max-width:42ch}
   .kicker{max-width:62ch;color:var(--dim);margin:.7rem 0 0}
 
@@ -248,12 +263,25 @@
     .rail > div{border-left:none;border-top:1px solid var(--line)}
     .rail > div:first-child{border-top:none}
     nav .lnk{display:none}
-    /* let the header wrap so the GitHub button drops under the brand instead of off-screen */
-    nav{flex-wrap:wrap;height:auto;padding:9px 0;gap:8px 16px}
-    nav .sp{display:none}
-    .brand{flex:1 1 100%}
+    /* one row: brand left, icon-only GitHub button right */
+    nav{height:56px;gap:12px}
+    .ghlink{padding:.5rem .6rem;line-height:0}
+    .gh-txt{display:none}
+    .gh-ico{display:block}
     .hero::after{background-size:34px 34px}
     .dl{gap:18px}
+  }
+  @media (max-width:540px){
+    .er .in{font-size:.85rem}
+    .er-more{display:none}
+    .panel pre{font-size:.72rem;padding:16px 18px}
+    nav{gap:8px}
+    .brand{gap:9px}
+    .brand .by{padding-left:10px;margin-left:5px}
+    .brand .by img{height:13px}
+  }
+  @media (max-width:360px){
+    .brand .by{display:none}
   }
 </style>
 </head>
@@ -278,12 +306,12 @@
   <a class="lnk" href="#how">how_it_works</a>
   <a class="lnk" href="#families">families</a>
   <a class="lnk" href="#download">download</a>
-  <a class="btn gho" href="https://github.com/ironsightscyber/scancrypt" target="_blank" rel="noopener">GitHub</a>
+  <a class="btn gho ghlink" href="https://github.com/ironsightscyber/scancrypt" target="_blank" rel="noopener" aria-label="ScanCrypt on GitHub"><svg class="gh-ico" viewBox="0 0 16 16" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg><span class="gh-txt">GitHub</span></a>
 </nav></div></header>
 
 <a class="er" href="recover.html"><div class="wrap"><div class="in">
   <span class="pulse" aria-hidden="true"></span>
-  <span><b>Been hit and need answers now?</b> There is a plain-English guide for IT staff at an encrypted business: what to do first, and how to check what is recoverable.</span>
+  <span><b>Been hit and need answers now?</b><span class="er-more"> There is a plain-English guide for IT staff at an encrypted business: what to do first, and how to check what is recoverable.</span></span>
   <span class="go">start_here &rarr;</span>
 </div></div></a>
 
