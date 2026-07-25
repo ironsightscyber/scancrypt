@@ -212,41 +212,20 @@
   .win .bottom{display:flex;gap:7px;flex-wrap:wrap}
   .win .bottom .b.hl{outline:2px solid #37E28C;outline-offset:1px}
 
-  /* ---- animated offset maps + a scan that plays out in the app mockup ----
+  /* ---- the app mockup plays a scan when scrolled into view ----
      JS adds .anim to <html> (so nothing hides if JS is off) and .in when the
-     element scrolls into view. A curtain retracts left->right revealing the map,
-     a bright scanline rides the edge, the red encrypted block softly pulses. */
-  .strip{position:relative}
-  .strip .scan,.win .wstrip .scan{position:absolute;top:-1px;bottom:-1px;width:2px;left:0;z-index:3;
-    background:#eafff4;box-shadow:0 0 16px 5px rgba(55,226,140,.6);opacity:0;pointer-events:none}
-  .strip .curtain,.win .wstrip .curtain{position:absolute;inset:0;z-index:2;transform-origin:right;
-    display:none;pointer-events:none}
-  .strip .curtain{background:var(--empty)}
-  .win .wstrip .curtain{background:#e7ebf1}
-  .anim .strip .curtain,.anim .win .wstrip .curtain{display:block}
-  .anim .strip.in .curtain,.anim .win.in .wstrip .curtain{animation:sc-retract 1.7s cubic-bezier(.45,.5,.15,1) forwards}
-  .anim .strip.in .scan,.anim .win.in .wstrip .scan{animation:sc-sweep 1.7s cubic-bezier(.45,.5,.15,1) forwards}
-  @keyframes sc-retract{to{transform:scaleX(0)}}
-  @keyframes sc-sweep{0%{left:0;opacity:0}6%{opacity:1}90%{opacity:1}100%{left:100%;opacity:0}}
-  .anim .strip.in .e{animation:sc-encpulse 2.6s ease-in-out 1.7s infinite}
-  @keyframes sc-encpulse{0%,100%{filter:brightness(1)}50%{filter:brightness(1.4)}}
-  /* app mockup: progress fills, then the result lines rise in sequence */
+     mockup scrolls into view. The green progress bar fills while the status
+     line counts the percentage up, then the results rise in sequence. */
   .anim .win .prog i{width:0}
-  .anim .win.in .prog i{animation:sc-fill 1.55s cubic-bezier(.5,.4,.2,1) forwards}
-  @keyframes sc-fill{to{width:100%}}
   .anim .win .seq{opacity:0;transform:translateY(6px)}
   .anim .win.in .seq{animation:sc-rise .5s ease forwards}
   @keyframes sc-rise{to{opacity:1;transform:none}}
-  .anim .win.in .small{animation-delay:1.3s}
-  .anim .win.in .verdict{animation-delay:1.55s}
-  .anim .win.in .wstrip .curtain,.anim .win.in .wstrip .scan{animation-delay:1.75s}
-  .anim .win.in .wleg{animation-delay:2s}
-  .anim .win.in .next{animation-delay:2.15s}
-  .anim .win.in .detail{animation-delay:2.3s}
+  .anim .win.in .verdict{animation-delay:2.3s}
+  .anim .win.in .wstrip{animation-delay:2.5s}
+  .anim .win.in .wleg{animation-delay:2.65s}
+  .anim .win.in .next{animation-delay:2.8s}
+  .anim .win.in .detail{animation-delay:2.95s}
   @media (prefers-reduced-motion:reduce){
-    .anim .strip .curtain,.anim .win .wstrip .curtain{display:none}
-    .strip .scan,.win .wstrip .scan{display:none}
-    .anim .strip.in .e{animation:none}
     .anim .win .prog i{width:100%}
     .anim .win .seq{opacity:1;transform:none;animation:none}
   }
@@ -334,7 +313,7 @@
 <span class="lbl">integrity  </span> input unchanged (sha256 before = after)</pre>
       <div class="ent">
         <div class="scale"><span>offset 0</span><span>end of disk</span></div>
-        <div class="strip"><span class="e" style="width:1.5%"></span><span class="i" style="width:82%"></span><span class="z" style="width:16.5%"></span><i class="scan"></i><i class="curtain"></i></div>
+        <div class="strip"><span class="e" style="width:1.5%"></span><span class="i" style="width:82%"></span><span class="z" style="width:16.5%"></span></div>
         <div class="lg"><span><i style="background:var(--enc)"></i>encrypted</span><span><i style="background:var(--sig)"></i>intact, recoverable</span><span><i style="background:var(--empty)"></i>empty</span></div>
       </div>
     </div>
@@ -383,7 +362,7 @@
           <div class="prog"><i></i></div>
           <div class="small seq">Rebuilding the disk from its surviving block map… done.</div>
           <div class="verdict seq">98.6% of this virtual disk is recoverable (137 GB of 140 GB)</div>
-          <div class="wstrip"><span class="e" style="width:1.4%"></span><span class="i" style="width:83%"></span><span class="z" style="width:15.6%"></span><i class="scan"></i><i class="curtain"></i></div>
+          <div class="wstrip seq"><span class="e" style="width:1.4%"></span><span class="i" style="width:83%"></span><span class="z" style="width:15.6%"></span></div>
           <div class="wleg seq"><i style="background:#FF5A5A"></i>encrypted<i style="background:#37E28C"></i>intact / recoverable<i style="background:#2a3242"></i>empty</div>
           <div class="next seq"><b>This is a virtual disk (.vhdx). ScanCrypt can read the files straight out of it, even if it will not mount.</b> Best next step: click <b>Extract files from volume</b> and choose an empty destination folder.</div>
           <div class="detail seq">Ransomware family: Makop / Phobos, confirmed (matched on footer_magic, extension)<br>Disk type: dynamic VHDX, 140 GB, header encrypted, rebuilt from surviving BAT<br>Filesystem: NTFS volume found, 138 files &ge; 1 MB</div>
@@ -415,7 +394,7 @@ scan:
   next 16 GB   <span class="ok">intact</span>   24/24 spot checks clean
 result: full transaction log read back.</pre>
       <div class="ent">
-        <div class="strip"><span class="e" style="width:3%"></span><span class="i" style="width:97%"></span><i class="scan"></i><i class="curtain"></i></div>
+        <div class="strip"><span class="e" style="width:3%"></span><span class="i" style="width:97%"></span></div>
       </div>
     </div>
   </div>
@@ -653,21 +632,42 @@ result: full transaction log read back.</pre>
     })
     .catch(function () { /* keep the fallback version already in the page */ });
 
-  // Scroll-triggered scan animation for the offset maps and the app mockup. We only opt in
-  // (add .anim) when JS is running, so with JS off nothing is hidden behind a curtain.
+  // When the app mockup scrolls into view it plays a scan: the green progress bar fills
+  // while the status line counts the percentage up, then the results appear in sequence.
+  // We only opt in (add .anim) when JS is running, so with JS off nothing is hidden.
   (function () {
+    var reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
     document.documentElement.classList.add("anim");
-    var targets = document.querySelectorAll(".strip, .win");
+
+    function playScan(win) {
+      win.classList.add("in");                       // starts the CSS result sequence
+      var bar = win.querySelector(".prog i");
+      var status = win.querySelector(".small");
+      if (reduce || !bar || !status) return;         // CSS shows the finished state
+      var doneText = status.textContent, D = 2200, t0 = null;
+      function step(ts) {
+        if (t0 === null) t0 = ts;
+        var p = Math.min(1, (ts - t0) / D);
+        var e = 1 - Math.pow(1 - p, 3);              // fast start, settling toward the end
+        bar.style.width = (e * 100).toFixed(1) + "%";
+        status.textContent = "Scanning… " + Math.round(e * 100) + "%";
+        if (p < 1) requestAnimationFrame(step);
+        else status.textContent = doneText;
+      }
+      requestAnimationFrame(step);
+    }
+
+    var wins = document.querySelectorAll(".win");
     if (!("IntersectionObserver" in window)) {
-      targets.forEach(function (el) { el.classList.add("in"); });   // no IO: just show them
+      wins.forEach(function (el) { el.classList.add("in"); });   // no IO: just show it finished
       return;
     }
     var io = new IntersectionObserver(function (entries) {
       entries.forEach(function (e) {
-        if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); }
+        if (e.isIntersecting) { io.unobserve(e.target); playScan(e.target); }
       });
     }, { threshold: 0.35 });
-    targets.forEach(function (el) { io.observe(el); });
+    wins.forEach(function (el) { io.observe(el); });
   })();
 </script>
 
