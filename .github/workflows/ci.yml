@@ -111,6 +111,16 @@ jobs:
           path: |
             dist/scancrypt.exe
             dist/scancrypt-gui.exe
+      # Checksum files ship next to the exes so any download can be verified even
+      # while releases are unsigned (and as a second factor once signing is on).
+      - name: Generate SHA-256 checksum files
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          cd dist
+          sha256sum scancrypt.exe > scancrypt.exe.sha256
+          sha256sum scancrypt-gui.exe > scancrypt-gui.exe.sha256
+          cat *.sha256
       - name: Attach to release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
@@ -118,6 +128,8 @@ jobs:
           files: |
             dist/scancrypt.exe
             dist/scancrypt-gui.exe
+            dist/scancrypt.exe.sha256
+            dist/scancrypt-gui.exe.sha256
 
   build-macos:
     needs: test
@@ -151,8 +163,13 @@ jobs:
           name: scancrypt-macos
           retention-days: 14
           path: dist/scancrypt-macos.zip
+      - name: Generate SHA-256 checksum file
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: cd dist && shasum -a 256 scancrypt-macos.zip > scancrypt-macos.zip.sha256
       - name: Attach to release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/scancrypt-macos.zip
+          files: |
+            dist/scancrypt-macos.zip
+            dist/scancrypt-macos.zip.sha256
