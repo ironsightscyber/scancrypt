@@ -2,6 +2,7 @@
 
 Thanks for helping victims get their data back. ScanCrypt is free and
 open-source (Apache-2.0), maintained by [IronSights](https://ironsights.com.au).
+All project spaces follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 The most valuable contributions are **new ransomware-family signatures** and
 **validation against real samples**, but bug fixes, docs, and format support
 are all welcome.
