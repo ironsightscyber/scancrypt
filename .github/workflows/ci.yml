@@ -134,6 +134,83 @@ jobs:
             dist/scancrypt-gui.exe
             dist/scancrypt.exe.sha256
             dist/scancrypt-gui.exe.sha256
+      - name: Upload signed exes for the VirusTotal job
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-exes-signed
+          retention-days: 1
+          path: |
+            dist/scancrypt.exe
+            dist/scancrypt-gui.exe
+
+  # Submit the signed release binaries to VirusTotal and append the report links +
+  # detection counts to the release notes. Report-only and non-blocking (a VT outage
+  # never fails the release). Dormant until a VT_API_KEY secret exists (a free
+  # VirusTotal API key); without it the job skips cleanly.
+  virustotal:
+    needs: sign-windows
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # edit the release notes
+    env:
+      VT_API_KEY: ${{ secrets.VT_API_KEY }}
+    steps:
+      - name: Download signed exes
+        if: ${{ env.VT_API_KEY != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-exes-signed
+          path: dist
+      - name: Submit to VirusTotal and update the release notes
+        if: ${{ env.VT_API_KEY != '' }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          set -uo pipefail
+          API="https://www.virustotal.com/api/v3"
+          section=$'\n## VirusTotal\n\nAutomated scan of the signed release binaries (report-only):\n'
+          ok=0
+          for f in dist/scancrypt.exe dist/scancrypt-gui.exe; do
+            name="$(basename "$f")"; size=$(stat -c%s "$f")
+            echo "::group::$name ($size bytes)"
+            if [ "$size" -lt 33554432 ]; then
+              resp=$(curl -s -X POST "$API/files" -H "x-apikey: $VT_API_KEY" --form "file=@$f")
+            else
+              upurl=$(curl -s "$API/files/upload_url" -H "x-apikey: $VT_API_KEY" | python3 -c 'import sys,json;print(json.load(sys.stdin)["data"])')
+              resp=$(curl -s -X POST "$upurl" -H "x-apikey: $VT_API_KEY" --form "file=@$f")
+            fi
+            aid=$(echo "$resp" | python3 -c 'import sys,json;print(json.load(sys.stdin)["data"]["id"])' 2>/dev/null || echo "")
+            if [ -z "$aid" ]; then echo "upload failed: $resp"; echo "::endgroup::"; continue; fi
+            sha=""; verdict=""
+            for i in $(seq 1 24); do
+              sleep 20
+              a=$(curl -s "$API/analyses/$aid" -H "x-apikey: $VT_API_KEY")
+              st=$(echo "$a" | python3 -c 'import sys,json;print(json.load(sys.stdin)["data"]["attributes"]["status"])' 2>/dev/null || echo "")
+              echo "poll $i: $st"
+              if [ "$st" = "completed" ]; then
+                sha=$(echo "$a" | python3 -c 'import sys,json;print(json.load(sys.stdin)["meta"]["file_info"]["sha256"])')
+                verdict=$(echo "$a" | python3 -c 'import sys,json;s=json.load(sys.stdin)["data"]["attributes"]["stats"];mal=s.get("malicious",0)+s.get("suspicious",0);tot=mal+s.get("undetected",0)+s.get("harmless",0);print(f"{mal}/{tot}")')
+                break
+              fi
+            done
+            if [ -n "$sha" ]; then
+              section+="- \`$name\` — $verdict flagged — https://www.virustotal.com/gui/file/$sha"$'\n'
+              ok=1
+            else
+              echo "timed out waiting for $name"
+            fi
+            echo "::endgroup::"
+          done
+          if [ "$ok" = "0" ]; then echo "No VirusTotal results to post."; exit 0; fi
+          body=$(gh release view "$TAG" --json body -q .body)
+          clean=$(printf '%s\n' "$body" | sed '/^## VirusTotal$/,$d')
+          printf '%s%s' "$clean" "$section" > /tmp/newbody.md
+          gh release edit "$TAG" --notes-file /tmp/newbody.md
+          echo "Release notes updated with VirusTotal results."
 
   build-macos:
     needs: test
