@@ -8,9 +8,11 @@ body:
       value: |
         Thanks for helping ScanCrypt recognise more strains.
 
-        **The easy way:** run `scancrypt --fingerprint <one-encrypted-file>` and paste what it
-        prints. It fills in most of this form for you and reads **no file contents** — just the
-        extension, a few trailing bytes, the encryption pattern, and any nearby ransom note.
+        **The easy way (no terminal needed):** in the ScanCrypt app, after a scan click
+        **Help improve ScanCrypt…** → **Open submission form**. It pre-fills this form for you.
+        Prefer the command line? Run `scancrypt --fingerprint <one-encrypted-file>` instead.
+        Either way it reads **no file contents** — just the extension, a few trailing bytes, the
+        encryption pattern, and any nearby ransom note.
 
         **⚠️ Please do NOT attach or paste encrypted files, ransom notes, keys, or anything
         victim-specific.** We only need the family-level markers below. If a real sample is ever
