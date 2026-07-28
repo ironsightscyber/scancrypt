@@ -30,11 +30,13 @@ Free and open source (Apache-2.0), **read-only**, by [IronSights](https://ironsi
 `scancrypt-gui.exe` (Windows) is a single portable file, nothing to install, fully offline.
 No terminal needed. New to this? Read the [plain-English guide](docs/recover.html).
 
-> **Windows SmartScreen / Defender note:** releases are not yet code-signed (free signing
-> via [SignPath Foundation](https://scancrypt.org/policies.html) is being onboarded), so
-> Windows may show *"Windows protected your PC"* on first run — click **More info → Run
-> anyway**. On macOS, right-click the app and choose **Open**. Every release is built
-> automatically from this public source by GitHub Actions, and every asset ships with a
+> **Windows SmartScreen / Defender note:** the project holds a DigiCert OV code signing
+> certificate (signing key in an Azure Key Vault HSM — see the
+> [signing & privacy policy](https://scancrypt.org/policies.html)). v1.0.0 shipped unsigned;
+> from v1.0.1 the Windows exes are code-signed. Even when signed, SmartScreen may still show
+> *"Windows protected your PC"* on a new release until download reputation builds — click
+> **More info → Run anyway**. On macOS, right-click the app and choose **Open**. Every release
+> is built automatically from this public source by GitHub Actions, and every asset ships with a
 > `.sha256` checksum on the release page so you can verify what you downloaded.
 
 **From source (any OS):**

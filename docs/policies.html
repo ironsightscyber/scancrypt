@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Signing & privacy | ScanCrypt</title>
-<meta name="description" content="ScanCrypt's code signing policy (SignPath Foundation) and privacy policy: what gets signed, who signs it, how to verify a download, and what data the tool and site do not collect.">
+<meta name="description" content="ScanCrypt's code signing policy (DigiCert OV certificate, key in an Azure Key Vault HSM) and privacy policy: what gets signed, who signs it, how to verify a download, and what data the tool and site do not collect.">
 <link rel="icon" type="image/png" href="favicon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -77,9 +77,11 @@
   <h1 style="margin-top:.6rem">Signing &amp; privacy</h1>
 
   <h2 id="signing">Code signing policy</h2>
-  <p><strong>Free code signing provided by <a href="https://signpath.io" target="_blank"
-    rel="noopener">SignPath.io</a>, certificate by <a href="https://signpath.org" target="_blank"
-    rel="noopener">SignPath Foundation</a>.</strong></p>
+  <p><strong>Windows releases are code-signed with an Organization Validation (OV) code
+    signing certificate issued to IronSights Pty Ltd, obtained through
+    <a href="https://www.ssltrust.com.au" target="_blank" rel="noopener">VeroKey / SSLTrust</a>
+    (a DigiCert partner). The signing key is generated in and never leaves an Azure Key Vault
+    hardware security module (FIPS 140-2 Level 2).</strong></p>
 
   <h3>What gets signed</h3>
   <p>The two Windows executables attached to tagged GitHub releases —
@@ -87,13 +89,15 @@
     Signed binaries are always built from this project's own public source code; the project
     never signs third-party binaries. The macOS archive is currently not code-signed.</p>
 
-  <h3>How releases are built</h3>
+  <h3>How releases are built and signed</h3>
   <p>Every release binary is produced automatically by
     <a href="https://github.com/ironsightscyber/scancrypt/blob/main/.github/workflows/ci.yml"
     target="_blank" rel="noopener">GitHub Actions</a> from the public repository at a version tag.
-    A release gate refuses to build unless the tag exactly matches the version in source, and the
-    signing service independently verifies that the artifact came from a genuine GitHub Actions
-    run of this repository before signing it. There are no manual build or signing steps.</p>
+    A release gate refuses to build unless the tag exactly matches the version in source. Signing
+    then runs in a protected release environment, authenticating to Azure with a short-lived OIDC
+    token (no long-lived secret is stored); the certificate's private key stays inside the Key
+    Vault HSM and is only ever used to produce a signature. Signatures are RFC 3161 timestamped,
+    so they remain valid after the certificate expires. There are no manual build or signing steps.</p>
 
   <h3>Team and roles</h3>
   <ul>
@@ -107,14 +111,16 @@
   <h3>Verifying a download</h3>
   <ul>
     <li><strong>Signed releases:</strong> right-click the <code>.exe</code> → Properties →
-      Digital Signatures. The signature should verify and name <strong>SignPath Foundation</strong>.</li>
+      Digital Signatures. The signature should verify and name <strong>IronSights Pty Ltd</strong>
+      as the signer, with the certificate issued by DigiCert.</li>
     <li><strong>Any release:</strong> compare the file's SHA-256 hash against the checksums on the
       <a href="https://github.com/ironsightscyber/scancrypt/releases" target="_blank"
       rel="noopener">release page</a>.</li>
   </ul>
-  <div class="note">Signing begins with the first release after the project's SignPath Foundation
-    onboarding completes. Releases published before then are unsigned — verify those by SHA-256,
-    and expect a Windows SmartScreen notice on first run.</div>
+  <div class="note">Releases published before the signing certificate was in place (v1.0.0) are
+    unsigned; verify those by SHA-256. Because this is an OV certificate, Windows SmartScreen may
+    still show an "unrecognized app" notice on early signed releases until download reputation
+    accumulates. That is expected and not a sign of tampering; verify by SHA-256 if in doubt.</div>
 
   <h2 id="privacy">Privacy</h2>
   <h3>The software</h3>

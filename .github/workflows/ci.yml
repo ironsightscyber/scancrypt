@@ -6,6 +6,11 @@ on:
     tags: ["v*"]
   pull_request:
 
+# Least privilege by default: the test job needs only read. Jobs that need more
+# (build-exe, build-macos) request contents: write at the job level below.
+permissions:
+  contents: read
+
 jobs:
   test:
     strategy:
@@ -24,11 +29,7 @@ jobs:
     needs: test
     runs-on: windows-latest
     permissions:
-      contents: write   # required for the release-attach step to create/update a release
-    # Surfacing the token as a job env lets the signing steps gate on it: secrets cannot
-    # be referenced directly in an `if:` condition, but env vars can. Empty == signing off.
-    env:
-      SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+      contents: read   # build only; signing + release attach happen in the sign-windows job
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -54,75 +55,78 @@ jobs:
       - run: python build_scripts/build_cli.py       # slim console exe (no Qt)
       - run: python build_scripts/build_windows.py    # full GUI exe
 
-      # --- Code signing (SignPath Foundation) ---------------------------------------------
-      # DORMANT until the SignPath side exists. If SIGNPATH_API_TOKEN is empty these steps
-      # are skipped and unsigned exes ship exactly as they do today. Signing runs only on
-      # release tags (Foundation quota is per-request; every-push signing would burn it).
-      # To turn signing on, after SignPath Foundation approves the project:
-      #   1. In SignPath: create the project (slug "scancrypt"), an artifact configuration
-      #      describing a zip containing the two Windows PE files (GitHub artifacts are
-      #      zips), a "release-signing" policy, and link the GitHub Actions trusted build
-      #      system to this repository.
-      #   2. Add repo secret  SIGNPATH_API_TOKEN   (a CI user token from SignPath)
-      #      Add repo variable SIGNPATH_ORG_ID     (the organization GUID from SignPath)
-      # Note: release-signing policies typically require a manual approval in the SignPath
-      # UI per request; the submit step waits for it, so approve promptly after tagging.
+      - name: Report exe sizes
+        shell: bash
+        run: ls -lh dist/*.exe
+
+      # Hand the unsigned exes to the sign-windows job (tags only). Signing runs there,
+      # in the protected `release` environment where the Azure identity is authorized.
       - name: Upload unsigned exes for signing
-        id: unsigned
-        if: ${{ env.SIGNPATH_API_TOKEN != '' && startsWith(github.ref, 'refs/tags/v') }}
+        if: startsWith(github.ref, 'refs/tags/v')
         uses: actions/upload-artifact@v4
         with:
-          name: unsigned-exes
+          name: windows-exes-unsigned
           retention-days: 1
           path: |
             dist/scancrypt.exe
             dist/scancrypt-gui.exe
-      - name: Submit SignPath signing request
-        if: ${{ env.SIGNPATH_API_TOKEN != '' && startsWith(github.ref, 'refs/tags/v') }}
-        uses: signpath/github-action-submit-signing-request@v1.2   # verify latest when enabling
+
+  # Code signing (DigiCert OV cert, key in Azure Key Vault Premium HSM).
+  # Runs only on release tags, only after the build passed, and only in the `release`
+  # environment -- which is what the Azure federated credential trusts. Auth is OIDC
+  # (azure/login), so there is no client secret stored anywhere. Signatures are RFC3161
+  # timestamped so they stay valid after the certificate expires.
+  sign-windows:
+    needs: build-exe
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: windows-latest
+    environment: release          # binds the OIDC token subject to the federated credential
+    permissions:
+      id-token: write             # OIDC login to Azure (no stored secret)
+      contents: write             # attach the signed exes to the release
+    steps:
+      - name: Download unsigned exes
+        uses: actions/download-artifact@v4
         with:
-          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
-          organization-id: ${{ vars.SIGNPATH_ORG_ID }}
-          project-slug: scancrypt
-          signing-policy-slug: release-signing
-          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
-          wait-for-completion: true
-          output-artifact-directory: dist-signed
-      - name: Replace exes with the signed versions
-        if: ${{ env.SIGNPATH_API_TOKEN != '' && startsWith(github.ref, 'refs/tags/v') }}
+          name: windows-exes-unsigned
+          path: dist
+      - name: Azure login (federated OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Install AzureSignTool
         shell: bash
         run: |
-          cp -f dist-signed/scancrypt.exe dist-signed/scancrypt-gui.exe dist/
-          ls -lh dist/*.exe
-
-      - name: Report exe sizes
+          dotnet tool install --global AzureSignTool
+          echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
+      - name: Sign exes (Key Vault key, RFC3161 timestamp)
         shell: bash
-        run: ls -lh dist/*.exe
-      # Upload run artifacts only on release tags, with short retention. On every-push builds
-      # these 121 MB uploads pile up and exhaust the Actions storage quota. continue-on-error
-      # so that if the quota is hit anyway, it never blocks the actual release attachment below
-      # (the exes still reach users via the GitHub Release, which is separate storage).
-      - uses: actions/upload-artifact@v4
-        if: startsWith(github.ref, 'refs/tags/v')
-        continue-on-error: true
-        with:
-          name: scancrypt-windows
-          retention-days: 14
-          path: |
-            dist/scancrypt.exe
-            dist/scancrypt-gui.exe
-      # Checksum files ship next to the exes so any download can be verified even
-      # while releases are unsigned (and as a second factor once signing is on).
-      - name: Generate SHA-256 checksum files
-        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          token="$(az account get-access-token --resource https://vault.azure.net --query accessToken -o tsv)"
+          AzureSignTool sign \
+            --azure-key-vault-url "${{ secrets.KEY_VAULT_URI }}" \
+            --azure-key-vault-certificate "${{ secrets.CERT_NAME }}" \
+            --azure-key-vault-accesstoken "$token" \
+            --file-digest sha256 \
+            --timestamp-rfc3161 http://timestamp.digicert.com \
+            --timestamp-digest sha256 \
+            dist/scancrypt.exe dist/scancrypt-gui.exe
+      - name: Verify signatures
+        shell: pwsh
+        run: |
+          $sigs = Get-AuthenticodeSignature dist/scancrypt.exe, dist/scancrypt-gui.exe
+          $sigs | Format-List Path, Status, StatusMessage
+          if ($sigs | Where-Object { $_.Status -ne 'Valid' }) { throw "A signature did not verify" }
+      - name: Generate SHA-256 checksums (of the signed exes)
         shell: bash
         run: |
           cd dist
           sha256sum scancrypt.exe > scancrypt.exe.sha256
           sha256sum scancrypt-gui.exe > scancrypt-gui.exe.sha256
           cat *.sha256
-      - name: Attach to release
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Attach signed exes to the release
         uses: softprops/action-gh-release@v2
         with:
           files: |
