@@ -41,7 +41,7 @@ footers) and labelled as such in the source.
 
 ## Expected results
 
-Measured on Python 3.14.4, numpy 2.5.1, scancrypt 1.0.1.
+Measured on Python 3.14.4, numpy 2.5.1, scancrypt 1.1.0.
 
 | Sample | Injected | Reported pattern | Reported encrypted | Recoverable |
 |---|---|---|---|---|
