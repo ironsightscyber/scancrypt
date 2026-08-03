@@ -13,15 +13,38 @@ permissions:
 
 jobs:
   test:
+    # pyproject declares requires-python >=3.10, so testing only 3.12 leaves the versions we
+    # claim to support unverified. That gap has already cost us: CPython 3.14 ships zlib-ng,
+    # whose DEFLATE output sits measurably closer to uniform than classic zlib's, and a
+    # compressed-vs-encrypted test that passed here failed for anyone on 3.14. It surfaced
+    # because a contributor happened to have 3.14 installed, not because CI caught it.
+    #
+    # The 3.14 legs are advisory (continue-on-error), so a failure there reports without
+    # blocking build-exe/build-macos, which gate on this job via `needs: test` and would
+    # otherwise stop a signed release over a Python version we do not ship on. Both build
+    # jobs pin 3.12 explicitly, so nothing here changes what ships. Promote 3.14 to blocking
+    # once it has been green for a few weeks -- until then, read these legs, don't trust the
+    # green tick alone.
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
+        python-version: ["3.12"]
+        include:
+          - os: ubuntu-latest
+            python-version: "3.14"
+            experimental: true
+          - os: windows-latest
+            python-version: "3.14"
+            experimental: true
+    name: test (${{ matrix.os }}, py${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.experimental || false }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
       - run: pip install -e ".[dev]"
       - run: pytest -q
 
