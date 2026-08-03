@@ -635,20 +635,239 @@ def scan(path: str, full: bool = False, sample_size: int = 65536, block_size: in
 
     if full:
         report = full_scan(path, block_size, progress, cancel_check)
+        report = _refine_hidden_stripes(path, report, ident, block_size, progress, cancel_check)
+        report = _fine_retry(path, report, block_size, progress, cancel_check)
         report.family = ident
         _apply_compressed_container_override(path, report)
         _apply_family_expectations(report, ident)
+        _warn_if_stripes_may_be_hidden(report, ident, block_size)
         _detect_formats(path, report)
         return report
 
     report = boundary_scan(path, sample_size, progress, cancel_check)
-    if report.pattern == "non-contiguous" and not boundary_only:
-        report = full_scan(path, block_size, progress, cancel_check)
+    if not boundary_only:
+        if _should_escalate(report, ident):
+            report = full_scan(path, block_size, progress, cancel_check)
+            report = _refine_hidden_stripes(path, report, ident, block_size,
+                                            progress, cancel_check)
+        else:
+            report = _confirm_nothing_encrypted(path, report, block_size,
+                                                progress, cancel_check)
     report.family = ident
     _apply_compressed_container_override(path, report)
     _apply_family_expectations(report, ident)
+    _warn_if_stripes_may_be_hidden(report, ident, block_size)
     _detect_formats(path, report)
     return report
+
+
+# Patterns that mean "we found no second encrypted region" -- the ones that can be wrong when
+# encryption is striped more finely than the scan can resolve.
+_NO_SECOND_REGION = {"fully-intact", "front-only", "compressed-benign", "scattered-benign"}
+
+# Smallest block a hidden-stripe re-scan will drop to. Below this the entropy of a single
+# block is too noisy to classify (see MIN_CLASSIFY_BLOCK): measured, a 512-byte block scan
+# reports scattered-benign on a file that 1024 correctly maps as periodic-intermittent.
+MIN_REFINE_BLOCK = 1024
+
+# How regular a set of high-entropy offsets must be before it reads as a periodic pattern
+# rather than scattered content. Measured against the median gap rather than the min/max
+# spread: one stripe straddling two samples, or one missed entirely, is enough to blow out a
+# spread test while leaving the period obvious. A gap counts as on-stride when it is close to
+# an integer multiple of the median -- a missed stripe doubles a gap, it does not break the
+# rhythm -- and the pattern reads as periodic when most gaps agree.
+STRIDE_CONFORM_TOL = 0.2
+STRIDE_CONFORM_FRACTION = 0.7
+MIN_STRIDE_POINTS = 3
+
+# A stripe wider than the sampling step lights up several consecutive samples, so the raw
+# offsets arrive clustered: gaps alternate tiny (within a stripe) and large (between them).
+# Cluster first, then measure the gaps between clusters, or the regularity is invisible.
+_CLUSTER_STEP_TOLERANCE = 1.5
+
+
+def _family_expects_periodic(ident) -> bool:
+    return bool(ident) and ident.get("large_file_pattern") == "periodic-intermittent"
+
+
+def _cluster_offsets(offsets, coarse_step: int = 0):
+    """Collapse runs of adjacent high-entropy samples into one offset per region.
+
+    A stripe wider than the sampling step lights up several consecutive samples, so the raw
+    offsets arrive in clumps and the gaps are bimodal: within a stripe they equal the sampling
+    step, between stripes they equal the stride.
+
+    The threshold is the sampling step, which the scan already knows -- inferring it from the
+    gaps themselves does not work in either direction. Taking it from the median merges
+    nothing when stripes are wide (the median IS the within-stripe spacing); taking it from
+    the maximum collapses everything into one cluster as soon as a single stripe is missed and
+    one gap comes out anomalously large. Both were measured. With no step supplied, fall back
+    to the smallest gap, which is the best available estimate of the sampling interval."""
+    offs = sorted(set(offsets or ()))
+    if len(offs) < 2:
+        return offs
+    gaps = [b - a for a, b in zip(offs, offs[1:])]
+    eps = (coarse_step or min(gaps)) * _CLUSTER_STEP_TOLERANCE
+    clusters = [offs[0]]
+    for prev, cur in zip(offs, offs[1:]):
+        if cur - prev > eps:
+            clusters.append(cur)
+    return clusters
+
+
+def _coarse_step_of(report: ScanReport) -> int:
+    """The byte interval between the boundary scan's coarse samples, read back off the report
+    so clustering can tell 'same stripe' from 'next stripe' exactly rather than by guesswork."""
+    rows = report.coarse_samples or []
+    return (rows[1][0] - rows[0][0]) if len(rows) > 1 else 0
+
+
+def _offsets_form_regular_stride(offsets, coarse_step: int = 0) -> bool:
+    """True if these high-entropy regions sit at a near-constant interval.
+
+    A handful of scattered dense blocks (a database's LOB pages, media, a compressed region)
+    land at irregular gaps. Encryption applied at a fixed stride does not -- its gaps are
+    near-identical. That regularity is the signature of intermittent encryption, and it is
+    the signal the boundary scan previously surfaced in isolated_high_entropy_offsets but
+    never acted on."""
+    clusters = _cluster_offsets(offsets, coarse_step)
+    if len(clusters) < MIN_STRIDE_POINTS:
+        return False
+    gaps = [b - a for a, b in zip(clusters, clusters[1:])]
+    median = sorted(gaps)[len(gaps) // 2]
+    if median <= 0:
+        return False
+    on_stride = 0
+    for gap in gaps:
+        multiple = round(gap / median)
+        if multiple >= 1 and abs(gap / median - multiple) <= STRIDE_CONFORM_TOL:
+            on_stride += 1
+    return on_stride / len(gaps) >= STRIDE_CONFORM_FRACTION
+
+
+def _should_escalate(report: ScanReport, ident) -> bool:
+    """Whether a boundary result warrants the cost of a full block scan.
+
+    Beyond the original non-contiguous case, escalate when the leftover high-entropy points
+    form a regular stride (periodic encryption the boundary search read as a front), or when
+    the identified family is known to encrypt intermittently and we nonetheless concluded
+    there was no second region. Both were previously reported and then ignored."""
+    if report.pattern == "non-contiguous":
+        return True
+    if _offsets_form_regular_stride(report.isolated_high_entropy_offsets,
+                                    _coarse_step_of(report)):
+        return True
+    return (_family_expects_periodic(ident)
+            and report.pattern in _NO_SECOND_REGION
+            and bool(report.isolated_high_entropy_offsets))
+
+
+def _refine_hidden_stripes(path: str, report: ScanReport, ident, block_size: int,
+                            progress: ProgressFn, cancel_check) -> ScanReport:
+    """Re-scan at a finer block when a full scan found no second encrypted region but there
+    is reason to think one is there.
+
+    An encrypted stripe narrower than the scan block averages with the plaintext around it
+    and falls below the entropy threshold, so it becomes invisible: measured, 4 KiB stripes
+    every 64 KiB read as fully-intact at the default 8 KiB block and map exactly at 4 KiB or
+    below. The failure is silent and optimistic, which is the worst direction for a recovery
+    estimate, so where there is a concrete reason to look closer, look closer."""
+    if report.pattern not in _NO_SECOND_REGION:
+        return report
+    reason = None
+    if _family_expects_periodic(ident):
+        reason = f"{ident['family']} is known to encrypt intermittently"
+    elif _offsets_form_regular_stride(report.isolated_high_entropy_offsets,
+                                      _coarse_step_of(report)):
+        reason = "high-entropy points past the boundary sit at a regular stride"
+    if reason is None:
+        return report
+
+    bs = block_size
+    while bs > MIN_REFINE_BLOCK:
+        bs //= 2
+        _check_cancel(cancel_check)
+        finer = full_scan(path, bs, progress, cancel_check)
+        if finer.pattern not in _NO_SECOND_REGION and finer.encrypted_bytes > report.encrypted_bytes:
+            finer.note = (
+                f"Found at a finer resolution: a first pass at {block_size:,}-byte blocks "
+                f"reported '{report.pattern}' ({report.encrypted_bytes:,} bytes encrypted), "
+                f"but {reason}, so the file was re-scanned at {bs:,}-byte blocks. "
+                f"Encrypted stripes narrower than the scan block average out against the "
+                f"intact bytes around them and read as clean. " + (finer.note or "")
+            )
+            return finer
+    return report
+
+
+# The boundary scan exists so a 100 GB disk isn't read end to end. That argument does not
+# apply to a file small enough to read in seconds -- and "fully-intact" is the costliest
+# verdict to get wrong, because it claims 100% recovery. So below these sizes, confirm it.
+CONFIRM_FULL_MAX_BYTES = 1 << 30      # 1 GiB: read fully at the normal block size
+CONFIRM_FINE_MAX_BYTES = 512 << 20    # 512 MiB: worth one more pass at the finest block
+
+
+def _confirm_nothing_encrypted(path: str, report: ScanReport, block_size: int,
+                                progress: ProgressFn, cancel_check) -> ScanReport:
+    """Verify a 'nothing is encrypted' verdict on files small enough that verifying is cheap.
+
+    The fast boundary search samples the file; encryption striped between those samples, or
+    narrower than a sample, leaves no trace in them. Measured: 8 KiB stripes every 64 KiB are
+    invisible to the boundary scan and map exactly under a full scan. Since the whole reason
+    for sampling is to avoid reading a huge disk, spend the read when the file is small."""
+    if report.pattern != "fully-intact" or report.size > CONFIRM_FULL_MAX_BYTES:
+        return report
+
+    confirmed = full_scan(path, block_size, progress, cancel_check)
+    if confirmed.encrypted_bytes > 0:
+        confirmed.note = (
+            f"The fast boundary scan found nothing, but a confirming full scan at "
+            f"{block_size:,}-byte blocks did: encryption striped between the boundary scan's "
+            f"samples leaves no trace in them. " + (confirmed.note or "")
+        )
+        return confirmed
+    return _fine_retry(path, confirmed, block_size, progress, cancel_check)
+
+
+def _fine_retry(path: str, report: ScanReport, block_size: int,
+                 progress: ProgressFn, cancel_check) -> ScanReport:
+    """One last pass at the finest reliable block when a full scan found nothing.
+
+    A stripe narrower than the scan block averages out against the intact bytes around it and
+    reads as clean, so 'nothing encrypted' from a coarse block is not the same as 'nothing
+    encrypted'. Bounded to files small enough that the extra read is cheap."""
+    if (report.pattern != "fully-intact" or report.size > CONFIRM_FINE_MAX_BYTES
+            or block_size <= MIN_REFINE_BLOCK):
+        return report
+    _check_cancel(cancel_check)
+    fine = full_scan(path, MIN_REFINE_BLOCK, progress, cancel_check)
+    if fine.encrypted_bytes <= 0:
+        return report
+    fine.note = (
+        f"Only visible at fine resolution: a full scan at {block_size:,}-byte blocks saw "
+        f"nothing, because each encrypted stripe is narrower than one block and averages out "
+        f"against the intact bytes around it. Re-scanned at {MIN_REFINE_BLOCK:,}-byte "
+        f"blocks. " + (fine.note or "")
+    )
+    return fine
+
+
+def _warn_if_stripes_may_be_hidden(report: ScanReport, ident, block_size: int) -> None:
+    """Last line of defence: say so plainly when we are reporting a file as recoverable but
+    the family we identified encrypts intermittently.
+
+    A stripe finer than the scan block leaves no trace for the heuristics above to catch, so
+    the honest move is to surface the uncertainty rather than report a confident number."""
+    if not _family_expects_periodic(ident) or report.pattern not in _NO_SECOND_REGION:
+        return
+    report.note = (report.note or "") + (
+        f" WARNING: this file is identified as {ident['family']}, which encrypts large files "
+        f"in stripes rather than a single front region, yet this scan found no such stripes. "
+        f"Encryption applied more finely than the {block_size:,}-byte scan block cannot be "
+        f"seen by it, and the resulting estimate would be optimistic. Before relying on this "
+        f"result, re-run with --full --block-size 1024. Treat the recoverable figure as "
+        f"unconfirmed until you do."
+    )
 
 
 # Patterns that assert some region is encrypted -- candidates for the container override.
