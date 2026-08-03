@@ -137,6 +137,69 @@ def test_compressed_content_is_not_flagged_by_the_escalation(tmp_path):
     assert report.encrypted_bytes == 0
 
 
+# ---------------------------------------------------------------- scan-mode agreement
+#
+# The two scan modes must not contradict each other on the same file. They did: --full, the
+# mode the GUI offers as "slower, catches scattered/periodic encryption", could not detect
+# front-only encryption at all and reported 100% recoverable on files the boundary scan
+# measured exactly. Front-only is the most common ransomware pattern, so the thorough option
+# was the one that missed it.
+
+def _write_front_only(path, total, encrypted, seed):
+    rng = random.Random(seed)
+    with open(path, "wb") as fh:
+        fh.write(rng.randbytes(encrypted))
+        remaining = total - encrypted
+        while remaining > 0:
+            chunk = min(4 * MIB, remaining)
+            fh.write(_plaintext(rng, chunk))
+            remaining -= chunk
+    return encrypted
+
+
+# Encrypted lengths are whole multiples of the 8192-byte scan block so both modes can be
+# asserted exactly; full mode counts whole blocks and would otherwise round down.
+FRONT_ONLY_CASES = [
+    ("1MiB-front-of-16MiB", 16 * MIB, 1 * MIB),
+    ("64KiB-front-of-8MiB", 8 * MIB, 64 * KIB),
+]
+
+
+@pytest.mark.parametrize("label,total,encrypted", FRONT_ONLY_CASES,
+                         ids=[c[0] for c in FRONT_ONLY_CASES])
+@pytest.mark.parametrize("full", [False, True], ids=["boundary", "full"])
+def test_front_only_detected_in_both_scan_modes(tmp_path, label, total, encrypted, full):
+    path = tmp_path / f"{label}.img"
+    truth = _write_front_only(path, total, encrypted, seed=31)
+
+    report = engine.scan(str(path), full=full)
+
+    assert report.pattern == "front-only", (
+        f"{label} in {'full' if full else 'boundary'} mode reported '{report.pattern}' "
+        f"({report.encrypted_bytes:,} encrypted) for a file with a {truth:,}-byte "
+        f"encrypted front."
+    )
+    assert report.encrypted_bytes == truth
+
+
+def test_single_run_at_offset_zero_is_front_only_not_scattered():
+    """A lone high-entropy run anchored at offset 0 is the front-only signature.
+
+    It cannot reach the dominant-run split -- with one run there is nothing to be an outlier
+    against, since its own length is the median -- so before the fix it fell through to the
+    regularity check, which cannot judge spacing from a single run and returned
+    scattered-benign. Runs are (start_block, length)."""
+    pattern, note = engine._classify_runs([(0, 128)], nblocks=12800)
+    assert pattern == "front-only", note
+
+
+def test_single_run_away_from_offset_zero_is_not_front_only():
+    """The anchor matters: an isolated dense region in the middle of a file is ordinary
+    content (LOB pages, an embedded image), not an encrypted front."""
+    pattern, _ = engine._classify_runs([(4000, 128)], nblocks=12800)
+    assert pattern != "front-only"
+
+
 # ---------------------------------------------------------------- stride detection units
 #
 # The two cases below are the false starts that cost real debugging time. Both looked correct

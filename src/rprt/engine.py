@@ -503,6 +503,28 @@ def _classify_runs(runs, nblocks, chi2_by_block=None, block_size=8192, magics_by
                     f"-- one large block of compressed/binary content, not encryption.")
         return "fully-encrypted", "A single run covering most of the file: likely fully encrypted."
 
+    # A single high-entropy run anchored at offset 0 is the front-only signature, whatever
+    # fraction of the file it covers. This has to be settled here, because the dominant-run
+    # split below cannot reach it: with only one run there is nothing for it to be an outlier
+    # against -- its own length is the median, so it never clears the 5x threshold -- and it
+    # falls through to _regularity_verdict, which cannot judge spacing from a single run and
+    # returns scattered-benign.
+    #
+    # Measured before this fix: a 1 MiB encrypted front on a 128 MiB file reported 0 bytes
+    # encrypted and 100% recoverable under --full, while the boundary scan on the same file
+    # reported 1,048,576 bytes exactly. Front-only is the most common ransomware pattern, so
+    # the mode advertised as the more thorough one was the one that missed it.
+    if len(runs) == 1 and runs[0][0] == 0:
+        comp, why = _run_is_compressed(runs, chi2_by_block, magics_by_block, chi2_usable)
+        if comp:
+            return ("compressed-benign",
+                    f"A single high-entropy run of {runs[0][1]} block(s) starts at offset 0, "
+                    f"but its bytes {why} -- compressed or binary content, not encryption.")
+        return ("front-only",
+                f"A single contiguous high-entropy run of {runs[0][1]} block(s) starting at "
+                f"offset 0, with everything past it reading as intact: the front-only "
+                f"encryption signature.")
+
     lengths = [r[1] for r in runs]
     sorted_lengths = sorted(lengths)
     median_len = sorted_lengths[len(sorted_lengths) // 2]
