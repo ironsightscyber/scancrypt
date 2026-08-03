@@ -229,10 +229,15 @@ jobs:
             echo "::endgroup::"
           done
           if [ "$ok" = "0" ]; then echo "No VirusTotal results to post."; exit 0; fi
-          body=$(gh release view "$TAG" --json body -q .body)
+          # -R is required: this job only downloads artifacts, it never checks out the repo,
+          # so gh has no git remote to infer the target from and fails with
+          # "fatal: not a git repository". Combined with continue-on-error on this step, that
+          # failed silently -- v1.1.0 was scanned successfully but its notes were never
+          # updated, and the job still reported success.
+          body=$(gh release view "$TAG" -R "$GITHUB_REPOSITORY" --json body -q .body)
           clean=$(printf '%s\n' "$body" | sed '/^## VirusTotal$/,$d')
           printf '%s%s' "$clean" "$section" > /tmp/newbody.md
-          gh release edit "$TAG" --notes-file /tmp/newbody.md
+          gh release edit "$TAG" -R "$GITHUB_REPOSITORY" --notes-file /tmp/newbody.md
           echo "Release notes updated with VirusTotal results."
 
   build-macos:
