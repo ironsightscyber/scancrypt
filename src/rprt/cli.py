@@ -15,6 +15,36 @@ if sys.stderr is not None:
     faulthandler.enable()
 
 
+def _raw_device_problem(path: str):
+    """Why `path` can't be opened as a raw device, phrased for someone mid-incident.
+
+    is_scannable() accepts any \\\\.\\ path on sight -- it cannot tell a real device from a
+    typo without opening it -- so the failure surfaced later as an uncaught PermissionError
+    plus PyInstaller's "Failed to execute script" dump. Forgetting to elevate is the obvious
+    mistake here (the documented raw-device scan needs Administrator), and a traceback reads
+    as a broken tool rather than a missing right-click. Returns None when the device opens.
+    """
+    from .source import is_raw_device
+    if not is_raw_device(path):
+        return None
+    try:
+        with open(path, "rb"):
+            return None
+    except PermissionError:
+        return (f"error: cannot open {path} without Administrator rights.\n"
+                f"Raw disk access is privileged on Windows. Close this window, right-click "
+                f"the program and choose 'Run as administrator', then try again.\n"
+                f"Scanning a file or disk image (.vhdx, .vmdk, .img) does not need "
+                f"Administrator.")
+    except FileNotFoundError:
+        return (f"error: no such device: {path}\n"
+                f"Check the device name -- physical drives are \\\\.\\PhysicalDrive0, "
+                f"\\\\.\\PhysicalDrive1 and so on, and volumes are \\\\.\\C:, \\\\.\\D:. "
+                f"Run 'wmic diskdrive list brief' to see what is attached.")
+    except OSError as exc:
+        return f"error: cannot open {path}: {exc}"
+
+
 def _contact_from_args(args):
     """Optional IronSights-style contact block on the report. CLI flags win; otherwise fall back
     to environment variables so a firm can configure it once. None keeps the report neutral."""
@@ -31,7 +61,7 @@ def _contact_from_args(args):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(
-        prog="rprt",
+        prog="scancrypt",
         description="Ransomware partial-recovery entropy mapper. Read-only scan; "
                      "never modifies the input.",
     )
@@ -106,11 +136,11 @@ def main(argv=None):
     ap.add_argument("--examiner", help="examiner name for the audit log / report")
     ap.add_argument("--evidence-id", help="evidence identifier for the audit log / report")
     ap.add_argument("--firm-name", help="add a 'recovery assistance' contact block to the HTML "
-                    "report (defaults to $RPRT_FIRM_NAME)")
+                    "report (defaults to $SCANCRYPT_FIRM_NAME)")
     ap.add_argument("--firm-url", help="link for the --firm-name contact block "
-                    "(defaults to $RPRT_FIRM_URL)")
+                    "(defaults to $SCANCRYPT_FIRM_URL)")
     ap.add_argument("--firm-blurb", help="custom text for the contact block "
-                    "(defaults to $RPRT_FIRM_BLURB)")
+                    "(defaults to $SCANCRYPT_FIRM_BLURB)")
     args = ap.parse_args(argv)
 
     contact = _contact_from_args(args)
@@ -159,6 +189,11 @@ def main(argv=None):
 
     if not engine.is_scannable(args.path):
         print(f"error: {args.path} is not a readable file or raw device path", file=sys.stderr)
+        return 1
+
+    unreadable = _raw_device_problem(args.path)
+    if unreadable:
+        print(unreadable, file=sys.stderr)
         return 1
 
     if args.fingerprint:
@@ -318,7 +353,7 @@ def _handle_batch(args, progress):
 def _handle_carve(args, report, progress):
     from . import carve
     if not carve.available():
-        print("PhotoRec not found. Install TestDisk/PhotoRec or set RPRT_PHOTOREC to the "
+        print("PhotoRec not found. Install TestDisk/PhotoRec or set SCANCRYPT_PHOTOREC to the "
               "binary path.", file=sys.stderr)
         return 1
     if report.pattern == "fully-encrypted":

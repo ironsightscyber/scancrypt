@@ -26,7 +26,9 @@ LogFn = Optional[Callable[[str], None]]
 
 # Env override lets a user point at a specific binary; otherwise search PATH then a few
 # common Windows install locations for the TestDisk/PhotoRec distribution.
-_ENV_OVERRIDE = "RPRT_PHOTOREC"
+# SCANCRYPT_PHOTOREC is the documented name; RPRT_PHOTOREC is the pre-rename fallback.
+_ENV_OVERRIDE = "SCANCRYPT_PHOTOREC"
+_ENV_OVERRIDE_LEGACY = "RPRT_PHOTOREC"
 _WINDOWS_HINTS = [
     r"C:\Program Files\testdisk\photorec_win.exe",
     r"C:\Program Files (x86)\testdisk\photorec_win.exe",
@@ -35,8 +37,8 @@ _WINDOWS_HINTS = [
 
 
 def find_photorec() -> Optional[str]:
-    """Locate the PhotoRec binary: $RPRT_PHOTOREC, then PATH, then common Windows dirs."""
-    override = os.environ.get(_ENV_OVERRIDE)
+    """Locate the PhotoRec binary: $SCANCRYPT_PHOTOREC, then PATH, then common Windows dirs."""
+    override = os.environ.get(_ENV_OVERRIDE) or os.environ.get(_ENV_OVERRIDE_LEGACY)
     if override and os.path.isfile(override) and os.access(override, os.X_OK):
         return override
     for name in ("photorec", "photorec.exe", "photorec_win.exe", "photorec_static"):
@@ -117,7 +119,7 @@ def carve(image: str, out_dir: str, whole_space: bool = True,
     photorec = find_photorec()
     if photorec is None:
         raise RuntimeError(
-            "PhotoRec not found. Install TestDisk/PhotoRec, or set RPRT_PHOTOREC to the "
+            "PhotoRec not found. Install TestDisk/PhotoRec, or set SCANCRYPT_PHOTOREC to the "
             "binary path.")
     os.makedirs(out_dir, exist_ok=True)
     dest_prefix = os.path.join(out_dir, "recup_dir")

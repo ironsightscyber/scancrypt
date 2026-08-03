@@ -57,14 +57,15 @@ MAX_SINGLE_READ = 64 * 1024 * 1024
 # than copied (which would otherwise write until the output disk fills).
 MAX_FILE_BYTES = 16 * 1024 ** 4
 # Env-gated read statistics for the investigation harness (off in production).
-_READER_STATS = os.environ.get("RPRT_READER_STATS") == "1"
+_READER_STATS = (os.environ.get("SCANCRYPT_READER_STATS")
+                 or os.environ.get("RPRT_READER_STATS")) == "1"
 _READER_STATS_TOTAL = ({"readers": 0, "reads": 0, "max_len": 0, "max_off": 0,
                         "rejected": 0, "hist": {}} if _READER_STATS else None)
 
 
 def reader_stats():
     """Aggregate recovered-VHDX read statistics for this process, or None unless
-    RPRT_READER_STATS=1. For the investigation harness: largest request, offset reach,
+    SCANCRYPT_READER_STATS=1. For the investigation harness: largest request, offset reach,
     log2 length histogram, and count of requests refused for exceeding MAX_SINGLE_READ."""
     return dict(_READER_STATS_TOTAL) if _READER_STATS_TOTAL is not None else None
 
