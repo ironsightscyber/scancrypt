@@ -12,11 +12,20 @@ per bin). So a fixed ceiling a few sigma above 255 almost never mislabels encryp
 (high precision), while compressed content -- whose distribution deviates -- exceeds it.
 
 Measured against real data (this repo's calibration run):
-  - encrypted / cryptographic-random: chi-square clusters at ~255 at every block size.
-  - zlib/DEFLATE (ZIP, OOXML, PNG, gzip -- the common cases): clearly elevated; cleanly
-    separable at >= 16 KiB, and separable as a run-mean at 8 KiB.
+  - encrypted / cryptographic-random: chi-square clusters at ~255 at every block size, and
+    never exceeds CHI2_CEILING in practice. This precision invariant is the guarantee.
+  - zlib/DEFLATE (ZIP, OOXML, PNG, gzip -- the common cases): elevated, but *how* elevated
+    depends on the deflate implementation. Classic zlib leaves more residual structure than
+    zlib-ng (shipped with CPython 3.14+), whose output sits measurably closer to uniform.
+    Single-block detection is therefore reliable at 8 KiB (mean ~460) but NOT dependable in
+    the 16-64 KiB range under zlib-ng (mean ~320-350 against a ~345 ceiling). The run-mean
+    is the dependable signal: a run of DEFLATE blocks means 420+ where random means ~255.
   - bzip2: elevated (mostly separable).
   - LZMA/xz (7z): statistically uniform -- NOT separable from encryption by this test.
+
+Consequence: prefer run_looks_compressed() over per-block looks_compressed() wherever a run
+is available. A single block clearing the ceiling is strong evidence of compression; a single
+block failing to clear it is NOT evidence of encryption.
 
 So this REFINES classification (mainly: stop flagging compressed content as encrypted)
 without ever reclassifying genuinely random/encrypted data. It is not a silver bullet:
@@ -36,9 +45,13 @@ CHI2_DOF = 255                       # 256 byte-value bins - 1
 _CHI2_STD = math.sqrt(2 * CHI2_DOF)  # ~22.58
 
 # Ceiling above which a block's byte distribution is "too structured to be encryption".
-# 4 sigma above the uniform mean -> ~3e-5 chance of a truly-random block exceeding it, so
-# encrypted data is essentially never mislabelled. Recall (catching compression) depends
-# on block size and compressor, by design -- precision is the invariant we protect.
+# 4 sigma above the uniform mean. The false-positive rate is ~1.4e-4 -- about one block in
+# 7,000 -- NOT the ~3e-5 a normal approximation suggests: chi-square is right-skewed, so the
+# normal approximation understates its upper tail. Wilson-Hilferty gives 1.40e-4; measured
+# over 40,000 CSPRNG blocks the rate was 1.0e-4 (8 KiB) and 1.5e-4 (64 KiB).
+# So a lone flagged block inside a large encrypted run is expected noise, not a finding --
+# which is the other reason to prefer the run-mean. Recall (catching compression) depends on
+# block size and compressor, by design -- precision is the invariant we protect.
 CHI2_CEILING = CHI2_DOF + 4.0 * _CHI2_STD           # ~345.3
 
 # For a *run* of blocks the mean chi-square has much lower variance, so a tighter cut
