@@ -365,6 +365,93 @@ def test_recovered_vhdx_reads_guest_via_bat(tmp_path):
         src.close()
 
 
+def _multi_block_recoverable_vhdx(blocks, file_slots):
+    """Like _minimal_recoverable_vhdx, but several guest blocks whose physical positions are
+    deliberately NOT guest order, plus sparse (unallocated) blocks.
+
+    A single-block fixture passes even if the block map is ignored and the data area is read
+    linearly, which is the one thing this reader exists to get right: a dynamic VHDX scatters
+    guest blocks anywhere in the file. `blocks[i]` is the content of guest block i (None =
+    sparse); `file_slots[i]` is the physical slot it is stored in.
+    """
+    import struct, uuid
+    BLOCK = 1 << 20
+    SECTOR = 512
+    META_OFF, BAT_OFF, DATA_OFF = 0x200000, 0x300000, 0x400000
+    size = DATA_OFF + (max(file_slots) + 1) * BLOCK
+    buf = bytearray(b"\xE7" * size)
+
+    def put(off, b): buf[off:off + len(b)] = b
+
+    BAT_G = uuid.UUID("2DC27766-F623-4200-9D64-115E9BFD4A08").bytes_le
+    META_G = uuid.UUID("8B7CA206-4790-4B9A-B8FE-575F050F886E").bytes_le
+    FP_G = uuid.UUID("CAA16737-FA36-4D43-B3B6-33F0AA44E76B").bytes_le
+    VS_G = uuid.UUID("2FA54224-CD1B-4876-B211-5DBED83BF4B8").bytes_le
+    LS_G = uuid.UUID("8141BF1D-A96F-4709-BA47-F233A8FAAB5F").bytes_le
+
+    put(0x40000, struct.pack("<4sIII", b"regi", 0, 2, 0))
+    put(0x40010, META_G + struct.pack("<QII", META_OFF, BLOCK, 1))
+    put(0x40010 + 32, BAT_G + struct.pack("<QII", BAT_OFF, BLOCK, 1))
+
+    put(META_OFF, struct.pack("<8sHH", b"metadata", 0, 3) + b"\x00" * 20)
+    put(META_OFF + 32, FP_G + struct.pack("<IIII", 0x10000, 8, 0, 0))
+    put(META_OFF + 64, VS_G + struct.pack("<IIII", 0x10008, 8, 0, 0))
+    put(META_OFF + 96, LS_G + struct.pack("<IIII", 0x10010, 4, 0, 0))
+    put(META_OFF + 0x10000, struct.pack("<II", BLOCK, 0))
+    put(META_OFF + 0x10008, struct.pack("<Q", len(blocks) * BLOCK))
+    put(META_OFF + 0x10010, struct.pack("<I", SECTOR))
+
+    for guest_idx, payload in enumerate(blocks):
+        if payload is None:
+            put(BAT_OFF + guest_idx * 8, struct.pack("<Q", 0))    # not present -> reads zero
+            continue
+        off = DATA_OFF + file_slots[guest_idx] * BLOCK
+        put(BAT_OFF + guest_idx * 8, struct.pack("<Q", off | 6))  # fully present
+        put(off, payload)
+    return bytes(buf)
+
+
+def _block_marker(i, size=1 << 20):
+    s = f"GUEST-BLOCK-{i:04d}-".encode()
+    return (s * ((size // len(s)) + 1))[:size]
+
+
+@pytest.mark.skipif(not ntfs.container_available(), reason="dissect.hypervisor not installed")
+def test_recovered_vhdx_reassembles_out_of_order_and_sparse_blocks(tmp_path):
+    """The guest disk must be rebuilt from the block map, not from file order.
+
+    Guest blocks 0, 2 and 3 are stored in reverse physical order and block 1 is unallocated,
+    so reading the data area linearly returns the right bytes in the wrong places -- and a
+    recovered disk that is subtly mis-ordered is worse than one that fails outright, because
+    the filesystem inside may still mount."""
+    BLOCK = 1 << 20
+    blocks = [_block_marker(0), None, _block_marker(2), _block_marker(3)]
+    file_slots = [3, 0, 1, 0]            # guest 0 lives last, guest 3 lives first
+    p = tmp_path / "enc_multi.vhdx"
+    p.write_bytes(_multi_block_recoverable_vhdx(blocks, file_slots))
+
+    assert ntfs.container_parses(str(p)) is False
+    assert ntfs.disk_read_method(str(p)) == "vhdx-recovered"
+
+    src = ntfs.open_disk_source(str(p))
+    try:
+        assert src.size == 4 * BLOCK
+        assert src.read_at(0, 32) == _block_marker(0)[:32]
+        assert src.read_at(2 * BLOCK, 32) == _block_marker(2)[:32]
+        assert src.read_at(3 * BLOCK, 32) == _block_marker(3)[:32]
+        assert src.read_at(1 * BLOCK, 32) == b"\x00" * 32, "unallocated block must read zero"
+
+        # A read crossing from the sparse block into a present one: single-block reads can
+        # look right while a spanning read is stitched together wrongly.
+        assert src.read_at(2 * BLOCK - 32, 64) == b"\x00" * 32 + _block_marker(2)[:32]
+
+        # And the whole thing, byte for byte.
+        assert src.read_at(0, 4 * BLOCK) == (
+            _block_marker(0) + b"\x00" * BLOCK + _block_marker(2) + _block_marker(3))
+    finally:
+        src.close()
+
+
 def test_iter_partition_offsets_gpt():
     import struct
 
