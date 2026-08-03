@@ -1,10 +1,9 @@
 name: Publish to PyPI
 
 # Publishes the sdist + wheel to PyPI via Trusted Publishing (OIDC, no token
-# secrets). DORMANT until the PyPI side exists: on pypi.org, add a (pending)
-# trusted publisher for project "scancrypt" pointing at this repository,
-# workflow "publish.yml", environment "pypi". Until then a tag push simply
-# fails at the upload step with an OIDC error and nothing is published.
+# secrets). Live: the trusted publisher for project "scancrypt" is registered
+# against this repository, workflow "publish.yml", environment "pypi". Pushing
+# a v* tag publishes to https://pypi.org/project/scancrypt/.
 on:
   push:
     tags: ["v*"]

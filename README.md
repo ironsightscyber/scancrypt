@@ -39,13 +39,21 @@ No terminal needed. New to this? Read the [plain-English guide](docs/recover.htm
 > is built automatically from this public source by GitHub Actions, and every asset ships with a
 > `.sha256` checksum on the release page so you can verify what you downloaded.
 
-**From source (any OS):**
+**Install from PyPI (any OS):**
+
+```bash
+pip install "scancrypt[ntfs]"        # [ntfs] adds VHDX/VHD/VMDK + NTFS support
+scancrypt --help                     # the CLI
+scancrypt-gui                        # the desktop app
+```
+
+**From a clone (for development):**
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate            # Windows: .venv\Scripts\activate
-pip install -e ".[ntfs]"             # ".[ntfs]" adds VHDX/VHD/VMDK + NTFS support
-scancrypt --help                     # or:  python -m rprt --help
+pip install -e ".[ntfs]"
+scancrypt --help
 ```
 
 `dissect.hypervisor` + `dissect.ntfs` (pulled in by `[ntfs]`) are what let ScanCrypt read
@@ -70,8 +78,8 @@ family      Makop / Phobos  (validated)
 ```
 
 Add `--report triage.html` for a shareable HTML report, `--json out.json` for machine output.
-Scans stay fast **even on huge disks** — a 322 GB VM images in seconds, because finding the
-encryption boundary doesn't require reading the whole file.
+Scans stay fast **even on huge disks** — a 300 GB VM image is measured in seconds, because
+finding the encryption boundary doesn't require reading the whole file.
 
 ### 2. Recover files from a virtual disk (the headline workflow)
 
@@ -196,6 +204,11 @@ pytest
 
 Run the GUI locally (works on macOS/Linux for development): `python -m rprt.gui`
 
+> **Why `rprt`?** The distribution is `scancrypt`, but the Python package is still `rprt`
+> (the original internal name, "ransomware partial-recovery tool"). Import paths and the
+> `python -m rprt` form use `rprt`; everything user-facing is `scancrypt`. Environment
+> variables are `SCANCRYPT_*`, with the older `RPRT_*` names still honoured as a fallback.
+
 ### Build the Windows app
 
 Must run on Windows (PyInstaller doesn't cross-compile):
@@ -203,11 +216,12 @@ Must run on Windows (PyInstaller doesn't cross-compile):
 ```powershell
 python -m venv .venv; .venv\Scripts\activate
 pip install -e ".[dev]"
-python build_scripts\build_windows.py     # -> dist\rprt-gui.exe (single file, no installer)
+python build_scripts\build_cli.py         # -> dist\scancrypt.exe (slim console exe, no Qt)
+python build_scripts\build_windows.py     # -> dist\scancrypt-gui.exe (single file, no installer)
 ```
 
-CI runs the suite on Ubuntu + Windows on every push and builds `rprt-gui.exe`; pushing a
-`v*` tag attaches it to a GitHub release.
+CI runs the suite on Ubuntu + Windows on every push and builds `scancrypt-gui.exe` and
+`scancrypt.exe`; pushing a `v*` tag signs them and attaches them to a GitHub release.
 
 ### Module map
 

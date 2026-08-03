@@ -1879,7 +1879,7 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(
                 self, "PhotoRec not found",
                 "Loose-file carving needs PhotoRec (part of TestDisk).\n\n"
-                "Install it, or set the RPRT_PHOTOREC environment variable to the binary.")
+                "Install it, or set the SCANCRYPT_PHOTOREC environment variable to the binary.")
             return
         dest_dir = QFileDialog.getExistingDirectory(self, "Carve loose files to…")
         if not dest_dir:

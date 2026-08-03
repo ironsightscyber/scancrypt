@@ -104,15 +104,20 @@ _REPORT_CSS = """
 
 def contact_from_env():
     """Build an optional recovery-assistance contact block from environment variables, so a
-    firm can set it once (RPRT_FIRM_NAME, RPRT_FIRM_URL, RPRT_FIRM_BLURB) and have it appear
-    in reports from both the CLI and the GUI. Returns None if no firm is configured, which
-    keeps the open-source default report neutral."""
+    firm can set it once (SCANCRYPT_FIRM_NAME, SCANCRYPT_FIRM_URL, SCANCRYPT_FIRM_BLURB) and
+    have it appear in reports from both the CLI and the GUI. Returns None if no firm is
+    configured, which keeps the open-source default report neutral.
+
+    The RPRT_* names are the pre-rename equivalents and still work."""
     import os
-    firm = os.environ.get("RPRT_FIRM_NAME")
+
+    def _get(name, default=""):
+        return os.environ.get(f"SCANCRYPT_{name}") or os.environ.get(f"RPRT_{name}", default)
+
+    firm = _get("FIRM_NAME", None)
     if not firm:
         return None
-    return {"firm": firm, "url": os.environ.get("RPRT_FIRM_URL", ""),
-            "blurb": os.environ.get("RPRT_FIRM_BLURB", "")}
+    return {"firm": firm, "url": _get("FIRM_URL"), "blurb": _get("FIRM_BLURB")}
 
 
 def _assist_section(contact) -> str:
