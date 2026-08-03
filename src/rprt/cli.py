@@ -106,11 +106,11 @@ def main(argv=None):
     ap.add_argument("--examiner", help="examiner name for the audit log / report")
     ap.add_argument("--evidence-id", help="evidence identifier for the audit log / report")
     ap.add_argument("--firm-name", help="add a 'recovery assistance' contact block to the HTML "
-                    "report (defaults to $RPRT_FIRM_NAME)")
+                    "report (defaults to $SCANCRYPT_FIRM_NAME)")
     ap.add_argument("--firm-url", help="link for the --firm-name contact block "
-                    "(defaults to $RPRT_FIRM_URL)")
+                    "(defaults to $SCANCRYPT_FIRM_URL)")
     ap.add_argument("--firm-blurb", help="custom text for the contact block "
-                    "(defaults to $RPRT_FIRM_BLURB)")
+                    "(defaults to $SCANCRYPT_FIRM_BLURB)")
     args = ap.parse_args(argv)
 
     contact = _contact_from_args(args)
@@ -318,7 +318,7 @@ def _handle_batch(args, progress):
 def _handle_carve(args, report, progress):
     from . import carve
     if not carve.available():
-        print("PhotoRec not found. Install TestDisk/PhotoRec or set RPRT_PHOTOREC to the "
+        print("PhotoRec not found. Install TestDisk/PhotoRec or set SCANCRYPT_PHOTOREC to the "
               "binary path.", file=sys.stderr)
         return 1
     if report.pattern == "fully-encrypted":
