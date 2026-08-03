@@ -1955,8 +1955,13 @@ class MainWindow(QMainWindow):
             self.progress_bar.setRange(0, 0)
             self.progress_label.setText("Working…")
         else:
+            # Stop the marquee, but leave the bar showing where the job actually got to.
+            # Resetting to 0 here contradicted the label beside it: a finished scan read
+            # "Done: 100.0%" next to an empty 0% bar, which looks like it silently failed.
+            # Keeping the last value also tells the truth after a cancel or an error, where
+            # the bar stops part-way instead of snapping to either end. A new job re-enters
+            # the busy branch above and goes back to the marquee, so nothing goes stale.
             self.progress_bar.setRange(0, 1000)
-            self.progress_bar.setValue(0)
 
 
 def _app_icon():
