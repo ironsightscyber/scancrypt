@@ -12,13 +12,18 @@ import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-# Skip on QtWidgets, not on PySide6. The top-level package imports fine on a bare Linux
-# runner; QtWidgets is what pulls in libEGL, which GitHub's ubuntu images do not ship, so
-# checking the wrong one let these fail at fixture setup instead of skipping. The desktop app
-# ships on Windows and macOS, so covering it there is the point -- Linux would need extra
-# system packages for no benefit to what we release.
-pytest.importorskip("PySide6.QtWidgets",
-                    reason="PySide6.QtWidgets unavailable (no Qt platform libraries here)")
+# Qt has to be importable AND have its platform libraries present. Two things make
+# importorskip the wrong tool here: the top-level PySide6 package imports fine on a bare Linux
+# runner while QtWidgets is what pulls in libEGL, and a missing shared library raises a plain
+# ImportError rather than ModuleNotFoundError -- which pytest deliberately propagates instead
+# of skipping, so it would not have helped even aimed at the right module.
+#
+# The desktop app ships on Windows and macOS, so covering it there is the point. Running these
+# on Linux would mean installing Qt platform libraries in CI for no benefit to what we release.
+try:
+    from PySide6.QtWidgets import QApplication  # noqa: F401
+except ImportError as exc:                       # missing package or missing platform libs
+    pytest.skip(f"PySide6.QtWidgets unavailable: {exc}", allow_module_level=True)
 
 
 @pytest.fixture(scope="module")
