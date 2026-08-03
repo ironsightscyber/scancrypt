@@ -10,3 +10,6 @@ dist/
 *.recovered
 _version_*.txt
 .DS_Store
+
+# Generated verification corpus (build with: python samples/make_samples.py)
+samples/corpus/
