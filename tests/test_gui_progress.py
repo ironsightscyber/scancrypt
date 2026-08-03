@@ -12,7 +12,13 @@ import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-pytest.importorskip("PySide6", reason="PySide6 not installed")
+# Skip on QtWidgets, not on PySide6. The top-level package imports fine on a bare Linux
+# runner; QtWidgets is what pulls in libEGL, which GitHub's ubuntu images do not ship, so
+# checking the wrong one let these fail at fixture setup instead of skipping. The desktop app
+# ships on Windows and macOS, so covering it there is the point -- Linux would need extra
+# system packages for no benefit to what we release.
+pytest.importorskip("PySide6.QtWidgets",
+                    reason="PySide6.QtWidgets unavailable (no Qt platform libraries here)")
 
 
 @pytest.fixture(scope="module")
