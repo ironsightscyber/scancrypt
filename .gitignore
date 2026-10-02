@@ -1,2 +1,4 @@
 .DS_Store
 Thumbs.db
+pypi-stub/dist/
+pypi-stub/*.egg-info/
