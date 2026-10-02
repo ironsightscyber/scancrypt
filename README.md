@@ -21,10 +21,12 @@ Get the latest signed release from the [Releases page](../../releases/latest).
 |------|-----------|
 | `scancrypt-gui.exe` | The graphical application. Start here. |
 | `scancrypt.exe` | Command-line version, for scripting and batch triage. |
+| `scancrypt-macos.zip` | The macOS application bundle (ScanCrypt.app), Apple silicon. |
 | `*.sha256` | Checksums for verifying your download. |
 
-Both executables are code-signed by IronSights (DigiCert OV certificate). Windows will show
-**IronSights** as the verified publisher in the User Account Control prompt.
+Both Windows executables are code-signed by IronSights (DigiCert OV certificate). Windows will show
+**IronSights** as the verified publisher in the User Account Control prompt. The macOS bundle is
+not yet code-signed: right-click ScanCrypt.app and choose **Open** on first launch.
 
 ## Verify your download
 
@@ -45,6 +47,7 @@ Get-AuthenticodeSignature .\scancrypt-gui.exe | Format-List Status, SignerCertif
 ## Requirements
 
 - Windows 10 or 11, 64-bit.
+- macOS on Apple silicon, for the app bundle.
 - No Python install required. Everything is bundled in the executable.
 
 ## Using it on a ransomware incident
