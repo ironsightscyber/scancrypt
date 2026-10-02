@@ -1,0 +1,50 @@
+ScanCrypt End User Licence Agreement
+
+IMPORTANT - READ CAREFULLY. This End User Licence Agreement ("Agreement") is a legal
+agreement between you (either an individual or a single entity, "You") and IronSights
+("IronSights", "we", "us") for the ScanCrypt software, including all executable
+components, associated media, and documentation ("Software").
+
+By downloading, installing, or using the Software, You agree to be bound by this
+Agreement. If You do not agree, do not download, install, or use the Software.
+
+1. LICENCE GRANT. Subject to Your compliance with this Agreement, IronSights grants You a
+   personal, non-exclusive, non-transferable, revocable licence to install and use the
+   Software for Your internal business or personal purposes.
+
+2. RESTRICTIONS. You may not, and may not permit any third party to: (a) reverse engineer,
+   decompile, disassemble, or otherwise attempt to derive the source code of the Software,
+   except to the extent this restriction is prohibited by applicable law; (b) modify,
+   adapt, or create derivative works of the Software; (c) rent, lease, lend, sell,
+   sublicense, or otherwise distribute the Software; or (d) remove or alter any proprietary
+   notices on the Software.
+
+3. OWNERSHIP. The Software is licensed, not sold. IronSights and its licensors retain all
+   right, title, and interest in and to the Software, including all intellectual property
+   rights. No rights are granted other than those expressly set out in this Agreement.
+
+4. DATA. The Software reads the files and storage You direct it to scan and does not modify
+   them. The Software does not transmit Your scanned data to IronSights.
+
+5. NO WARRANTY. THE SOFTWARE IS PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+   PARTICULAR PURPOSE, AND NON-INFRINGEMENT. ScanCrypt is a triage and data-recovery aid;
+   it does not guarantee that any data can be recovered, and its results should be
+   independently verified before You rely on them.
+
+6. LIMITATION OF LIABILITY. TO THE MAXIMUM EXTENT PERMITTED BY LAW, IN NO EVENT SHALL
+   IRONSIGHTS BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE
+   DAMAGES, OR ANY LOSS OF DATA, PROFITS, OR BUSINESS, ARISING OUT OF OR RELATED TO THE
+   SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
+
+7. CONSUMER RIGHTS. Nothing in this Agreement excludes, restricts, or modifies any
+   guarantee, right, or remedy You may have under the Australian Consumer Law or other law
+   that cannot lawfully be excluded.
+
+8. TERMINATION. This Agreement is effective until terminated. It terminates automatically
+   if You breach it. On termination You must stop using and delete all copies of the
+   Software.
+
+9. GOVERNING LAW. This Agreement is governed by the laws of New South Wales, Australia.
+
+(c) IronSights. All rights reserved.
